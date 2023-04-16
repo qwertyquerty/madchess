@@ -25,6 +25,8 @@ PIECE_VALUES = (0, 1, 3, 3, 5, 9, 0)
 CP_PIECE_VALUES = (0, 100, 300, 300, 500, 900, 0)
 ENDGAME_PIECE_COUNT = 16
 
+STARTING_DEPTH = 2
+
 MIDGAME_PIECE_POSITION_TABLES = (
 	(None,),	
 	( # Pawn
@@ -346,14 +348,14 @@ def begin(board):
 	global nodes
 	stop = False
 	nodes = 0
-	depth = 1
+	depth = STARTING_DEPTH
 	position_table.clear()
 
 	while not stop:
 		score, end_board = alpha_beta(board, 0, depth, -CHECKMATE, CHECKMATE)
 
 		with lock:
-			if abs(score) >= CHECKMATE - depth:
+			if abs(score) >= (CHECKMATE - len(end_board.move_stack)):
 				mate_in = math.ceil(((CHECKMATE - abs(score)) if score > 0 else -(CHECKMATE - abs(score))) / 2)
 
 				print(f"info nodes {nodes} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)} depth {len(end_board.move_stack) - len(board.move_stack)} score mate {mate_in} pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}")
