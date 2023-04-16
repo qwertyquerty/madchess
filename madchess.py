@@ -2,6 +2,8 @@ import chess
 import chess.polyglot
 from chess import WHITE, BLACK, KING, PAWN
 
+import math
+
 import threading
 
 import time
@@ -99,8 +101,8 @@ ENDGAME_PIECE_POSITION_TABLES = (
 		5, 10, 10,-20,-20, 10, 10,  5,
 		5, -5,-10,  0,  0,-10, -5,  5,
 		0,  0,  0, 20, 20,  0,  0,  0,
-		5,  5, 10, 25, 25, 10,  5,  5,
-		10, 10, 20, 30, 30, 20, 10, 10,
+		30, 30, 30, 30, 30, 30, 30, 30,
+		40, 40, 40, 40, 40, 40, 40, 40,
 		50, 50, 50, 50, 50, 50, 50, 50,
 		0,  0,  0,  0,  0,  0,  0,  0,
 	),
@@ -177,6 +179,15 @@ def score_move(board, move):
 	score -= MIDGAME_PIECE_POSITION_TABLES[attacker.piece_type][move.from_square if board.turn else chess.square_mirror(move.from_square)]
 	score += MIDGAME_PIECE_POSITION_TABLES[attacker.piece_type][move.to_square if board.turn else chess.square_mirror(move.to_square)]
 
+	# Promotions
+	if move.promotion:
+		score += CP_PIECE_VALUES[move.promotion]
+	
+	if board.gives_check(move):
+		score += 100
+	
+	score += len(list(board.legal_moves))
+
 	return score 
 
 def sorted_moves(board):
@@ -185,9 +196,9 @@ def sorted_moves(board):
 
 	return legal_moves
 
-def score_board(board):
+def score_board(board, current_depth):
 	if board.is_checkmate():
-		return CHECKMATE if board.turn else -CHECKMATE
+		return -CHECKMATE + current_depth
 	
 	if board.is_fivefold_repetition() or board.is_insufficient_material() or board.is_stalemate():
 		return 0
@@ -231,14 +242,15 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 	nodes += 1
 
 	alpha_orig = alpha
-	
+
 	pt_hash = chess.polyglot.zobrist_hash(board)
 	pt_entry = position_table.get(pt_hash)
 	
-	if pt_entry is not None and (pt_entry["leaf_distance"]) >= (max_depth-current_depth):
+
+	if pt_entry is not None and (pt_entry["leaf_distance"]) == (max_depth-current_depth):
 		if pt_entry["flag"] == EXACT:
 			return pt_entry["value"], pt_entry["board"]
-		elif pt_entry["flag"]  == LOWER:
+		elif pt_entry["flag"] == LOWER:
 			alpha = max(alpha, pt_entry["value"])
 		elif pt_entry["flag"]  == UPPER:
 			beta = min(beta, pt_entry["value"])
@@ -247,12 +259,11 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 			return pt_entry["value"], pt_entry["board"]
 
 
-	if current_depth == max_depth or board.is_game_over() or board.is_repetition():
-		score, end_board = quiescence(board, current_depth, max_depth, alpha, beta)
-		return score, end_board
+	if current_depth == max_depth or board.is_game_over() or board.is_fivefold_repetition():
+		return quiescence(board, current_depth, max_depth, alpha, beta)
 
-	best_board = board
-	best_score = -CHECKMATE
+
+	best_board = board.copy()
 
 	for move in sorted_moves(board):
 		nboard = board.copy()
@@ -265,47 +276,39 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 
 		score = -score
 
-		if score > best_score:
-			best_score = score
+		if score > alpha:
+			alpha = score
 			best_board = end_board
-			if pt_entry:
-				pt_entry["value"] = score
-				pt_entry["board"] = best_board
-
-			if best_score > alpha:
-				alpha = best_score
 
 		if alpha >= beta:
 			break
 
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-		if best_score <= alpha_orig:
-			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": UPPER, "value": best_score, "board": best_board}
-		elif best_score >= beta:
-			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": LOWER, "value": best_score, "board": best_board}
+		if alpha <= alpha_orig:
+			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": UPPER, "value": alpha, "board": best_board}
+		elif alpha >= beta:
+			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": LOWER, "value": alpha, "board": best_board}
 		else:
-			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": EXACT, "value": best_score, "board": best_board}
+			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": EXACT, "value": alpha, "board": best_board}
 
-	return best_score, best_board
+	
+	return alpha, best_board
 
 
 def quiescence(board, current_depth, max_depth, alpha, beta):
 	global nodes
 	nodes += 1
 
-	score = score_board(board)
+	score = score_board(board, current_depth)
 
 	if score >= beta:
 		return beta, board
 
 	alpha = max(alpha, score)
 
-	if board.outcome() is not None or board.can_claim_draw():
-		return score, board
-
 	best_board = board
 
-	quiescence_moves = [move for move in sorted_moves(board) if board.is_capture(move) or board.gives_check(move) or board.is_check()]
+	quiescence_moves = [move for move in sorted_moves(board) if board.is_capture(move) or move.promotion is not None]
 
 	for move in quiescence_moves:
 		nboard = board.copy()
@@ -329,29 +332,37 @@ def info_loop():
 	start = search_start_time
 	offset = 0
 	while not stop:
-		time.sleep(0.1)
+		time.sleep(0.5)
 		end = time.time()
 		nps = (nodes-offset) / (end - start)
 		offset = nodes
 		start = time.time()
 
-		pt_hash = chess.polyglot.zobrist_hash(board)
-		entry = position_table.get(pt_hash)
-
-		if entry:
-			with lock:
-				print(f"info nodes {nodes} nps {int(nps)} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)} depth {len(entry['board'].move_stack) - len(board.move_stack)} score cp {entry['value']} pv {' '.join([str(move) for move in entry['board'].move_stack[len(board.move_stack):]])}")
+		with lock:
+			print(f"info nodes {nodes} nps {int(nps)} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}")
 
 def begin(board):
 	global stop
 	global nodes
 	stop = False
 	nodes = 0
-	depth = 0
+	depth = 1
 	position_table.clear()
 
 	while not stop:
-		alpha_beta(board, 0, depth, -CHECKMATE, CHECKMATE)
+		score, end_board = alpha_beta(board, 0, depth, -CHECKMATE, CHECKMATE)
+
+		with lock:
+			if abs(score) >= CHECKMATE - depth:
+				mate_in = math.ceil(((CHECKMATE - abs(score)) if score > 0 else -(CHECKMATE - abs(score))) / 2)
+
+				print(f"info nodes {nodes} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)} depth {len(end_board.move_stack) - len(board.move_stack)} score mate {mate_in} pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}")
+			else:
+				print(f"info nodes {nodes} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)} depth {len(end_board.move_stack) - len(board.move_stack)} score cp {score} pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}")
+			
+		if end_board.is_checkmate():
+			break
+
 		depth += 1
 
 def halt():
