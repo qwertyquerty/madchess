@@ -17,15 +17,20 @@ AUTHOR = "Madeline"
 UPPER = 1
 LOWER = 2
 EXACT = 3
-CHECKMATE = 10000
+CHECKMATE = 10_000
 
-MAX_PTABLE_SIZE = 1000000
+MAX_PTABLE_SIZE = 1_000_000
 
 PIECE_VALUES = (0, 1, 3, 3, 5, 9, 0)
 CP_PIECE_VALUES = (0, 100, 300, 300, 500, 900, 0)
 ENDGAME_PIECE_COUNT = 16
 
-STARTING_DEPTH = 2
+STARTING_DEPTH = 1
+
+QUIESCENCE_CHECK_DEPTH_LIMIT = 3 # stop looking for checks in quiescence after this quiescence depth limit
+
+ASPIRATION_WINDOW_DEFAULT = CP_PIECE_VALUES[PAWN] // 4
+ASPIRATION_INCREASE_EXPONENT = 4
 
 MIDGAME_PIECE_POSITION_TABLES = (
 	(None,),	
@@ -103,9 +108,9 @@ ENDGAME_PIECE_POSITION_TABLES = (
 		5, 10, 10,-20,-20, 10, 10,  5,
 		5, -5,-10,  0,  0,-10, -5,  5,
 		0,  0,  0, 20, 20,  0,  0,  0,
-		30, 30, 30, 30, 30, 30, 30, 30,
-		40, 40, 40, 40, 40, 40, 40, 40,
 		50, 50, 50, 50, 50, 50, 50, 50,
+		100, 100, 100,100,100,100,100,100,
+		300,300,300,300,300,300,300,300,
 		0,  0,  0,  0,  0,  0,  0,  0,
 	),
 
@@ -167,8 +172,15 @@ ENDGAME_PIECE_POSITION_TABLES = (
 
 COLOR_MOD = (-1, 1)
 
+MOVE_VALUE_CHECK = 500
+MOVE_VALUE_ATTACK_LAST_MOVE = 100
+
 def score_move(board, move):
 	score = 0
+
+	if len(board.move_stack) and move.to_square == board.move_stack[-1].to_square:
+		# a simple, but quite efficient heuristic is capturing the last moved piece
+		score += MOVE_VALUE_ATTACK_LAST_MOVE
 
 	attacker = board.piece_at(move.from_square)
 	victim = board.piece_at(move.to_square)
@@ -186,17 +198,16 @@ def score_move(board, move):
 		score += CP_PIECE_VALUES[move.promotion]
 	
 	if board.gives_check(move):
-		score += 100
-	
-	score += len(list(board.legal_moves))
+		score += MOVE_VALUE_CHECK
 
-	return score 
+	return score
 
-def sorted_moves(board):
-	legal_moves = list(board.legal_moves)
-	legal_moves.sort(key=lambda move: score_move(board, move), reverse=True)
 
-	return legal_moves
+def sorted_moves(moves, board):
+	moves = list(moves)
+	moves.sort(key=lambda move: score_move(board, move), reverse=True)
+	return moves
+
 
 def score_board(board, current_depth):
 	if board.is_checkmate():
@@ -248,26 +259,23 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 	pt_hash = chess.polyglot.zobrist_hash(board)
 	pt_entry = position_table.get(pt_hash)
 	
-
 	if pt_entry is not None and (pt_entry["leaf_distance"]) == (max_depth-current_depth):
 		if pt_entry["flag"] == EXACT:
-			return pt_entry["value"], pt_entry["board"]
+			return pt_entry["value"], board if len(board.move_stack) >= len(pt_entry["board"].move_stack) else pt_entry["board"]
 		elif pt_entry["flag"] == LOWER:
 			alpha = max(alpha, pt_entry["value"])
 		elif pt_entry["flag"]  == UPPER:
 			beta = min(beta, pt_entry["value"])
 		
 		if alpha >= beta:
-			return pt_entry["value"], pt_entry["board"]
-
+			return pt_entry["value"], board if len(board.move_stack) >= len(pt_entry["board"].move_stack) else pt_entry["board"]
 
 	if current_depth == max_depth or board.is_game_over() or board.is_fivefold_repetition():
-		return quiescence(board, current_depth, max_depth, alpha, beta)
-
+		return quiescence(board, current_depth + 1, max_depth, alpha, beta)
 
 	best_board = board.copy()
 
-	for move in sorted_moves(board):
+	for move in sorted_moves(board.legal_moves, board):
 		nboard = board.copy()
 		nboard.push(move)
 
@@ -286,14 +294,10 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 			break
 
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-		if alpha <= alpha_orig:
-			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": UPPER, "value": alpha, "board": best_board}
-		elif alpha >= beta:
-			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": LOWER, "value": alpha, "board": best_board}
-		else:
-			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": EXACT, "value": alpha, "board": best_board}
+		if pt_entry is None or (pt_entry["leaf_distance"]) > (max_depth-current_depth):
+			flag = (UPPER if alpha <= alpha_orig else (LOWER if alpha >= beta else EXACT)) 
+			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": flag, "value": alpha, "board": best_board}
 
-	
 	return alpha, best_board
 
 
@@ -310,9 +314,12 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 
 	best_board = board
 
-	quiescence_moves = [move for move in sorted_moves(board) if board.is_capture(move) or move.promotion is not None]
+	sorted_quiesence_moves = sorted_moves(
+		(move for move in board.legal_moves if board.is_capture(move) or move.promotion is not None or board.is_check() or (board.gives_check(move) and (current_depth-max_depth) <= QUIESCENCE_CHECK_DEPTH_LIMIT)),
+		board
+	)
 
-	for move in quiescence_moves:
+	for move in sorted_quiesence_moves:
 		nboard = board.copy()
 		nboard.push(move)
 
@@ -327,6 +334,7 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 			best_board = end_board
 
 	return alpha, best_board
+
 
 def info_loop():
 	global search_start_time
@@ -343,7 +351,8 @@ def info_loop():
 		with lock:
 			print(f"info nodes {nodes} nps {int(nps)} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}")
 
-def begin(board):
+
+def iterative_deepening(board):
 	global stop
 	global nodes
 	stop = False
@@ -351,32 +360,51 @@ def begin(board):
 	depth = STARTING_DEPTH
 	position_table.clear()
 
+	gamma = 0
+
+	# Iterative deepening
 	while not stop:
-		score, end_board = alpha_beta(board, 0, depth, -CHECKMATE, CHECKMATE)
+		aspw_lower = -ASPIRATION_WINDOW_DEFAULT
+		aspw_higher = ASPIRATION_WINDOW_DEFAULT
+
+		while True:
+			alpha = gamma + aspw_lower
+			beta = gamma + aspw_higher
+
+			score, end_board = alpha_beta(board, 0, depth, alpha, beta)
+
+			if score <= alpha:
+				aspw_lower *= ASPIRATION_INCREASE_EXPONENT
+			elif score >= beta:
+				aspw_higher *= ASPIRATION_INCREASE_EXPONENT
+			else:
+				break
 
 		with lock:
-			if abs(score) >= (CHECKMATE - len(end_board.move_stack)):
-				mate_in = math.ceil(((CHECKMATE - abs(score)) if score > 0 else -(CHECKMATE - abs(score))) / 2)
+			depth_string = f"depth {depth} seldepth {len(end_board.move_stack) - len(board.move_stack)}" # full search depth / quiescence search depth
+			time_string = f"time {int((time.time()-search_start_time) * 1000)}" # time spent searching this position
+			hashfull_string = f"hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}" # how full the transposition table is
+			pv_string = f"pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}" # move preview
 
-				print(f"info nodes {nodes} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)} depth {len(end_board.move_stack) - len(board.move_stack)} score mate {mate_in} pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}")
+			if end_board.is_checkmate(): # Checkmate is found, report how many moves its in
+				mate_in = (len(end_board.move_stack) - len(board.move_stack)) * COLOR_MOD[score > 0]
+				print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
 			else:
-				print(f"info nodes {nodes} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)} depth {len(end_board.move_stack) - len(board.move_stack)} score cp {score} pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}")
-			
+				print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
+		
+		# Once a mate is found, it wont do us any better to try to find it again in more moves
 		if end_board.is_checkmate():
 			break
 
+		gamma = score
 		depth += 1
-
-def halt():
-	global stop
-	stop = True
 
 stop = True
 
 board = chess.Board()
 
-search_thread = threading.Thread(target=lambda: begin(board), daemon=True)
-node_info_thread = threading.Thread(target=lambda: info_loop(), daemon=True)
+search_thread = None
+node_info_thread = None
 
 while True:
 	line = input()
@@ -392,7 +420,7 @@ while True:
 		print("readyok")
 	
 	elif cmd == "quit":
-		halt()
+		stop = True
 		break
 
 	elif cmd == "position":
@@ -409,12 +437,12 @@ while True:
 			
 	elif cmd == "go":
 		if stop:
-			search_thread = threading.Thread(target=lambda: begin(board), daemon=True)
+			search_thread = threading.Thread(target=lambda: iterative_deepening(board), daemon=True)
 			node_info_thread = threading.Thread(target=lambda: info_loop(), daemon=True)
 			search_thread.start()
 			node_info_thread.start()
 
 	elif cmd == "stop":
-		halt()
+		stop = True
 		while search_thread.is_alive() or node_info_thread.is_alive():
 			pass

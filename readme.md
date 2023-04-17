@@ -7,7 +7,7 @@ Simple Alpha Beta UCI Compliant Chess Engine in Python
 - [x] MVV LVA and positional move ordering
 - [x] transposition tables
 - [x] iterative deepening
-- [ ] aspiration windows
+- [x] aspiration windows
 - [ ] finish full UCI implementation
 - [ ] null window
 - [ ] futility pruning
