@@ -216,13 +216,13 @@ def score_board(board, current_depth):
 			pt = board.piece_type_at(square)
 
 			if endgame:
-				score += ENDGAME_PIECE_POSITION_TABLES[pt][square if pc == WHITE else chess.square_mirror(square)] if pc else -ENDGAME_PIECE_POSITION_TABLES[pt][square if pc == WHITE else chess.square_mirror(square)]
+				score += ENDGAME_PIECE_POSITION_TABLES[pt][square if pc == WHITE else chess.square_mirror(square)] * COLOR_MOD[pc]
 			else:
-				score += MIDGAME_PIECE_POSITION_TABLES[pt][square if pc == WHITE else chess.square_mirror(square)] if pc else -MIDGAME_PIECE_POSITION_TABLES[pt][square if pc == WHITE else chess.square_mirror(square)]
+				score += MIDGAME_PIECE_POSITION_TABLES[pt][square if pc == WHITE else chess.square_mirror(square)] * COLOR_MOD[pc]
 			
-			score += CP_PIECE_VALUES[pt] if pc else -CP_PIECE_VALUES[pt]
+			score += CP_PIECE_VALUES[pt] * COLOR_MOD[pc]
 
-	score += len(list(board.legal_moves)) if board.turn else -len(list(board.legal_moves))
+	score += len(list(board.legal_moves)) * COLOR_MOD[board.turn]
 
 	return score if board.turn else -score
 
