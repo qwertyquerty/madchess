@@ -175,8 +175,12 @@ COLOR_MOD = (-1, 1)
 MOVE_VALUE_CHECK = 500
 MOVE_VALUE_ATTACK_LAST_MOVE = 100
 
-def score_move(board, move):
+def score_move(board, move, pt_best_move = None):
 	score = 0
+
+	if move == pt_best_move:
+		# we REALLY prefer to try the best move we found in the previous iteration first before anything else for alpha beta
+		return CHECKMATE
 
 	if len(board.move_stack) and move.to_square == board.move_stack[-1].to_square:
 		# a simple, but quite efficient heuristic is capturing the last moved piece
@@ -203,9 +207,9 @@ def score_move(board, move):
 	return score
 
 
-def sorted_moves(moves, board):
+def sorted_moves(moves, board, pt_best_move = None):
 	moves = list(moves)
-	moves.sort(key=lambda move: score_move(board, move), reverse=True)
+	moves.sort(key=lambda move: score_move(board, move, pt_best_move), reverse=True)
 	return moves
 
 
@@ -259,23 +263,28 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 	pt_hash = chess.polyglot.zobrist_hash(board)
 	pt_entry = position_table.get(pt_hash)
 	
-	if pt_entry is not None and (pt_entry["leaf_distance"]) == (max_depth-current_depth):
-		if pt_entry["flag"] == EXACT:
-			return pt_entry["value"], board if len(board.move_stack) >= len(pt_entry["board"].move_stack) else pt_entry["board"]
-		elif pt_entry["flag"] == LOWER:
+	pt_best_move = None
+
+	if pt_entry is not None and pt_entry["leaf_distance"] >= (max_depth-current_depth):
+		if pt_entry["flag"] == LOWER:
 			alpha = max(alpha, pt_entry["value"])
-		elif pt_entry["flag"]  == UPPER:
+		elif pt_entry["flag"] == UPPER:
 			beta = min(beta, pt_entry["value"])
-		
+		elif pt_entry["flag"] == EXACT:
+			return pt_entry["value"], pt_entry["board"]
+
 		if alpha >= beta:
-			return pt_entry["value"], board if len(board.move_stack) >= len(pt_entry["board"].move_stack) else pt_entry["board"]
+			return alpha, pt_entry["board"]
+		
+		pt_best_move = pt_entry["best_move"]
 
 	if current_depth == max_depth or board.is_game_over() or board.is_fivefold_repetition():
 		return quiescence(board, current_depth + 1, max_depth, alpha, beta)
 
-	best_board = board.copy()
+	best_board = None
+	best_score = -CHECKMATE - 1 # so it can be overwritten by -CHECKMATE on a > check
 
-	for move in sorted_moves(board.legal_moves, board):
+	for move in sorted_moves(board.legal_moves, board, pt_best_move):
 		nboard = board.copy()
 		nboard.push(move)
 
@@ -286,17 +295,26 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 
 		score = -score
 
-		if score > alpha:
-			alpha = score
+		if score > best_score:
+			best_score = score
 			best_board = end_board
+
+			if score > alpha:
+				alpha = score
 
 		if alpha >= beta:
 			break
 
+
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-		if pt_entry is None or (pt_entry["leaf_distance"]) > (max_depth-current_depth):
-			flag = (UPPER if alpha <= alpha_orig else (LOWER if alpha >= beta else EXACT)) 
-			position_table[pt_hash] = {"leaf_distance": max_depth-current_depth, "flag": flag, "value": alpha, "board": best_board}
+		flag = (UPPER if alpha <= alpha_orig else (LOWER if alpha >= beta else EXACT)) 
+		position_table[pt_hash] = {
+			"flag": flag,
+			"leaf_distance": max_depth-current_depth,
+			"value": alpha,
+			"board": best_board,
+			"best_move": best_board.move_stack[len(board.move_stack)] if len(best_board.move_stack) > len(board.move_stack) else None
+		}
 
 	return alpha, best_board
 
@@ -380,6 +398,8 @@ def iterative_deepening(board):
 			else:
 				break
 
+
+
 		with lock:
 			depth_string = f"depth {depth} seldepth {len(end_board.move_stack) - len(board.move_stack)}" # full search depth / quiescence search depth
 			time_string = f"time {int((time.time()-search_start_time) * 1000)}" # time spent searching this position
@@ -391,7 +411,7 @@ def iterative_deepening(board):
 				print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
 			else:
 				print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
-		
+
 		# Once a mate is found, it wont do us any better to try to find it again in more moves
 		if end_board.is_checkmate():
 			break
