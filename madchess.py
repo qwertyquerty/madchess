@@ -356,19 +356,28 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 
 def info_loop():
 	global search_start_time
+	global stop
 	search_start_time = time.time()
 	start = search_start_time
 	offset = 0
+
+	n = 0
 	while not stop:
-		time.sleep(0.5)
+		time.sleep(0.001)
+
 		end = time.time()
 		nps = (nodes-offset) / (end - start)
 		offset = nodes
 		start = time.time()
 
-		with lock:
-			print(f"info nodes {nodes} nps {int(nps)} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}")
+		if allowed_movetime is not None and int((time.time()-search_start_time) * 1000) >= allowed_movetime:
+			stop = True
 
+		if n % 1000 == 0:
+			with lock:
+				print(f"info nodes {nodes} nps {int(nps)} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}")
+		
+		n += 1
 
 def iterative_deepening(board):
 	global stop
@@ -376,6 +385,7 @@ def iterative_deepening(board):
 	stop = False
 	nodes = 0
 	depth = STARTING_DEPTH
+	bestmove = None
 	position_table.clear()
 
 	gamma = 0
@@ -391,6 +401,9 @@ def iterative_deepening(board):
 
 			score, end_board = alpha_beta(board, 0, depth, alpha, beta)
 
+			if score == None:
+				break
+
 			if score <= alpha:
 				aspw_lower *= ASPIRATION_INCREASE_EXPONENT
 			elif score >= beta:
@@ -398,26 +411,28 @@ def iterative_deepening(board):
 			else:
 				break
 
-
-
-		with lock:
+		if score is not None:
 			depth_string = f"depth {depth} seldepth {len(end_board.move_stack) - len(board.move_stack)}" # full search depth / quiescence search depth
 			time_string = f"time {int((time.time()-search_start_time) * 1000)}" # time spent searching this position
 			hashfull_string = f"hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}" # how full the transposition table is
 			pv_string = f"pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}" # move preview
+			bestmove = end_board.move_stack[len(board.move_stack)]
 
 			if end_board.is_checkmate(): # Checkmate is found, report how many moves its in
 				mate_in = (len(end_board.move_stack) - len(board.move_stack)) * COLOR_MOD[score > 0]
-				print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
+				with lock: print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
 			else:
-				print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
+				with lock: print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
 
-		# Once a mate is found, it wont do us any better to try to find it again in more moves
-		if end_board.is_checkmate():
-			break
+			# Once a mate is found, it wont do us any better to try to find it again in more moves
+			if end_board.is_checkmate():
+				break
 
-		gamma = score
-		depth += 1
+			gamma = score
+			depth += 1
+	
+	if bestmove:
+		print(f"bestmove {bestmove.uci()}")
 
 stop = True
 
@@ -456,6 +471,11 @@ while True:
 				board.push(chess.Move.from_uci(move))
 			
 	elif cmd == "go":
+		if "movetime" in args:
+			allowed_movetime = int(args[args.index("movetime")+1])
+		else:
+			allowed_movetime = None
+		
 		if stop:
 			search_thread = threading.Thread(target=lambda: iterative_deepening(board), daemon=True)
 			node_info_thread = threading.Thread(target=lambda: info_loop(), daemon=True)
@@ -463,6 +483,7 @@ while True:
 			node_info_thread.start()
 
 	elif cmd == "stop":
-		stop = True
-		while search_thread.is_alive() or node_info_thread.is_alive():
-			pass
+		if not stop:
+			stop = True
+			while search_thread.is_alive() or node_info_thread.is_alive():
+				pass
