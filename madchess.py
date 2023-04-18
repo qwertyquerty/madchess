@@ -445,6 +445,7 @@ search_thread = None
 node_info_thread = None
 
 while True:
+	# UCI implementation
 	line = input()
 	args = line.split()
 	cmd = args[0] if len(args) else None
@@ -465,6 +466,7 @@ while True:
 		if "fen" in args:
 			fen = line.split(" fen ")[1].split("moves")[0]
 			board = chess.Board(fen=fen)
+		
 		elif "startpos" in args:
 			board = chess.Board()
 			
