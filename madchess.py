@@ -365,15 +365,14 @@ def info_loop():
 	while not stop:
 		time.sleep(0.001)
 
-		end = time.time()
-		nps = (nodes-offset) / (end - start)
-		offset = nodes
-		start = time.time()
-
 		if allowed_movetime is not None and int((time.time()-search_start_time) * 1000) >= allowed_movetime:
 			stop = True
 
 		if n % 1000 == 0:
+			end = time.time()
+			nps = (nodes-offset) / (end - start)
+			offset = nodes
+			start = time.time()
 			with lock:
 				print(f"info nodes {nodes} nps {int(nps)} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}")
 		
