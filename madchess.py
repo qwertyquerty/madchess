@@ -192,6 +192,10 @@ def score_move(board, move, pt_best_move = None):
 	if victim is not None:
 		# MVV LVA
 		score += CP_PIECE_VALUES[victim.piece_type] - CP_PIECE_VALUES[attacker.piece_type]
+
+	if attacker.piece_type == KING:
+		# generally avoid moving king
+		score -= CP_PIECE_VALUES[PAWN]
 	
 	# Change in positional scoring
 	score -= MIDGAME_PIECE_POSITION_TABLES[attacker.piece_type][move.from_square if board.turn else chess.square_mirror(move.from_square)]
@@ -330,12 +334,12 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 
 	alpha = max(alpha, score)
 
-	best_board = board
-
 	sorted_quiesence_moves = sorted_moves(
 		(move for move in board.legal_moves if board.is_capture(move) or move.promotion is not None or board.is_check() or (board.gives_check(move) and (current_depth-max_depth) <= QUIESCENCE_CHECK_DEPTH_LIMIT)),
 		board
 	)
+
+	best_board = board
 
 	for move in sorted_quiesence_moves:
 		nboard = board.copy()
@@ -346,7 +350,7 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 
 		if score >= beta:
 			return beta, end_board
-		
+
 		if score > alpha:
 			alpha = score
 			best_board = end_board
@@ -363,12 +367,12 @@ def info_loop():
 
 	n = 0
 	while not stop:
-		time.sleep(0.001)
+		time.sleep(0.01)
 
 		if allowed_movetime is not None and int((time.time()-search_start_time) * 1000) >= allowed_movetime:
 			stop = True
 
-		if n % 1000 == 0:
+		if n % 25 == 0:
 			end = time.time()
 			nps = (nodes-offset) / (end - start)
 			offset = nodes
