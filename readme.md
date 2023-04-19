@@ -2,6 +2,10 @@
 
 Simple Alpha Beta UCI Compliant Chess Engine in Python
 
+***Running this engine with pypy is heavily recommended***
+
+### Todo List
+
 - [x] alpha beta pruned minimax search
 - [x] piece specific positional evaluation
 - [x] iterative deepening
