@@ -10,7 +10,7 @@ print = functools.partial(print, flush=True) # used to fix stdout for UCI
 ### Configuration ###
 
 ## Metadata ##
-VERSION = "MADCHESS v1.0"
+VERSION = "QChess v2.0"
 AUTHOR = "qwertyquerty"
 
 ## Enums ##

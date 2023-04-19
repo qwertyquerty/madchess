@@ -1,1 +1,0 @@
-C:\pypy\pypy.exe .\madchess.py
