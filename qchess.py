@@ -134,7 +134,7 @@ ENDGAME_PIECE_POSITION_TABLES = (
 		  0,  0,  0, 20, 20,  0,  0,  0,
 		 50, 50, 50, 50, 50, 50, 50, 50,
 		100,100,100,100,100,100,100,100,
-		300,300,300,300,300,300,300,300,
+		200,200,200,200,200,200,200,200,
 		  0,  0,  0,  0,  0,  0,  0,  0,
 	),
 
@@ -292,9 +292,16 @@ def score_board(board, current_depth):
 			
 			# Piece values, add centipawn values for our pieces, subtract them for opponents pieces
 			score += CP_PIECE_VALUES[piece_type] * COLOR_MOD[piece_color]
+		
 
 	# Mobility, we prefer boards that have more legal moves for us
 	score += len(list(board.legal_moves)) * COLOR_MOD[board.turn]
+
+	# Pop the board stack and count opponents moves negatively
+	if len(board.move_stack):
+		nboard = board.copy()
+		nboard.pop()
+		score += len(list(nboard.legal_moves)) * COLOR_MOD[nboard.turn]
 
 	# We want the score in the current players perspective for negamax to work
 	return score if board.turn else -score
@@ -336,20 +343,21 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 	pt_best_move = None
 
 	# If we have logged this board in the transposition table already, we can load its bounds and make use of them
-	if pt_entry is not None and pt_entry["leaf_distance"] >= (max_depth-current_depth):
-		if pt_entry["flag"] == LOWER:
-			alpha = max(alpha, pt_entry["value"])
-		elif pt_entry["flag"] == UPPER:
-			beta = min(beta, pt_entry["value"])
-		elif pt_entry["flag"] == EXACT:
-			return pt_entry["value"], pt_entry["board"]
+	if pt_entry is not None:
+		if pt_entry["leaf_distance"] >= (max_depth-current_depth):
+			if pt_entry["flag"] == LOWER:
+				alpha = max(alpha, pt_entry["value"])
+			elif pt_entry["flag"] == UPPER:
+				beta = min(beta, pt_entry["value"])
+			elif pt_entry["flag"] == EXACT:
+				return pt_entry["value"], pt_entry["board"]
 
-		if alpha >= beta:
-			return alpha, pt_entry["board"]
-		
+			if alpha >= beta:
+				return alpha, pt_entry["board"]
+			
 		# This will be used later in move ordering, its generally good to try the best move we found last time
 		# first whenever were searching this position again in the future
-		pt_best_move = pt_entry["best_move"]
+		pt_best_move = pt_entry["best_move"]			
 
 	# If we've reached our max depth or the game is over, perform a quiescence search
 	# If the game is over, the quiescence search will just immediately return the evaluated board anyway
@@ -435,7 +443,13 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 	# We only search checks up to a certain depth to avoid searching check repetitions
 	# We only really care about tactical checks anyway like forks or discovered checks, etc.
 	sorted_quiesence_moves = sorted_moves(
-		(move for move in board.legal_moves if board.is_capture(move) or move.promotion is not None or board.is_check() or (board.gives_check(move) and (current_depth-max_depth) <= QUIESCENCE_CHECK_DEPTH_LIMIT)),
+		(
+			move for move in board.legal_moves if
+			board.is_capture(move)
+			or move.promotion is not None or board.is_check()
+			or (board.gives_check(move) and (current_depth-max_depth) <= QUIESCENCE_CHECK_DEPTH_LIMIT)
+			or (board.piece_at(move.from_square).piece_type == PAWN and ((chess.square_rank(move.to_square) >= 5 and chess.square_rank(move.from_square) < chess.square_rank(move.to_square)) or (chess.square_rank(move.to_square) <= 2 and chess.square_rank(move.from_square) > chess.square_rank(move.to_square))))
+		),
 		board
 	)
 
