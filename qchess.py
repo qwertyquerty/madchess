@@ -482,10 +482,8 @@ def info_loop():
 	but I'll probably move that out of here eventually
 	"""
 
-	global search_start_time
 	global stop
-	search_start_time = time.time()
-	start = search_start_time
+	start = time.time()
 	offset = 0
 
 	n = 0
@@ -524,6 +522,8 @@ def iterative_deepening(board):
 	# We're starting a search so reset some variables
 	global stop
 	global nodes
+	global search_start_time
+	search_start_time = time.time()
 	stop = False
 	nodes = 0
 	depth = STARTING_DEPTH
