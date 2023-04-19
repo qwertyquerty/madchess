@@ -6,7 +6,8 @@ Simple Alpha Beta UCI Compliant Chess Engine in Python
 
 ### Installation
 
-`pip3 install -r requirements.txt`
+- **cpython**: `pip3 install -r requirements.txt`
+- **pypy**: `pypy -m pip install -r requirements.txt`
 
 ### Usage
 
