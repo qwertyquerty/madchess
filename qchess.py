@@ -46,7 +46,7 @@ QUIESCENCE_CHECK_DEPTH_LIMIT = 3
 # How big (+/-) the aspiration window is around gamma
 ASPIRATION_WINDOW_DEFAULT = CP_PIECE_VALUES[PAWN] // 2
 # If the real value is outside of the aspiration window, multiply the limiting bound by this
-ASPIRATION_INCREASE_EXPONENT = 4 
+ASPIRATION_INCREASE_EXPONENT = 4
 
 ## Move ordering ##
 # Value added for a check
@@ -399,6 +399,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 		# we dont need to evaluate this subtree any further because we know they will
 		# always play that move thats worse for us, or something even worse
 		if alpha >= beta:
+			best_board = end_board
 			break
 
 	# Update the transposition table with the new information we've learned about this position
@@ -534,7 +535,7 @@ def iterative_deepening(board):
 	position_table.clear()
 
 	# This is our first aspiration window guess, before we search depth 1
-	gamma = 0
+	gamma = score_board(board, 0)
 
 	# Iterative deepening
 	while not stop:
