@@ -2,6 +2,7 @@ import chess
 from chess import WHITE, KING, PAWN
 import chess.polyglot
 import functools
+import math
 import threading
 import time
 
@@ -571,7 +572,7 @@ def iterative_deepening(board):
 
 			if end_board.is_checkmate():
 				# Checkmate is found, report how many moves its in
-				mate_in = (len(end_board.move_stack) - len(board.move_stack)) * COLOR_MOD[score > 0]
+				mate_in = math.ceil((len(end_board.move_stack) - len(board.move_stack)) / 2) * COLOR_MOD[score > 0]
 				with threading.Lock(): print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
 			else:
 				# Otherwise just report centipawns score
