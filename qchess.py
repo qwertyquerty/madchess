@@ -62,9 +62,9 @@ MIDGAME_PIECE_POSITION_TABLES = (
 		 0,  0,  0,  0,  0,  0,  0,  0,
 		 5, 10, 10,-20,-20, 10, 10,  5,
 		 5, -5,-10,  0,  0,-10, -5,  5,
-		 0,  0,  0, 20, 20,  0,  0,  0,
-		 5,  5, 10, 25, 25, 10,  5,  5,
-		10, 10, 20, 30, 30, 20, 10, 10,
+		 5,  5,  0, 20, 20,  0,  5,  5,
+		10, 10, 10, 25, 25, 10, 10, 10,
+		10, 15, 20, 30, 30, 20, 15, 10,
 		50, 50, 50, 50, 50, 50, 50, 50,
 	     0,  0,  0,  0,  0,  0,  0,  0,
 	),
@@ -196,6 +196,17 @@ ENDGAME_PIECE_POSITION_TABLES = (
 )
 
 
+WILL_TO_PUSH = (
+	 0,  0,  0,  0,  0,  0,  0,  0,
+	10, 10, 10, 10, 10, 10, 10, 10,
+	10, 10, 10, 10, 10, 10, 10, 10,
+	20, 20, 20, 20, 20, 20, 20, 20,
+	20, 20, 20, 20, 20, 20, 20, 20,
+	30, 30, 30, 30, 30, 30, 30, 30,
+	30, 30, 30, 30, 30, 30, 30, 30,
+	30, 30, 30, 30, 30, 30, 30, 30
+)
+
 def score_move(board, move, pt_best_move = None):
 	"""
 	Used to score individual moves for move ordering, essentially
@@ -291,6 +302,8 @@ def score_board(board, current_depth):
 			else:
 				score += MIDGAME_PIECE_POSITION_TABLES[piece_type][square if piece_color == WHITE else chess.square_mirror(square)] * COLOR_MOD[piece_color]
 			
+			score += WILL_TO_PUSH[square if piece_color == WHITE else chess.square_mirror(square)] * COLOR_MOD[piece_color]
+
 			# Piece values, add centipawn values for our pieces, subtract them for opponents pieces
 			score += CP_PIECE_VALUES[piece_type] * COLOR_MOD[piece_color]
 		
@@ -358,7 +371,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta):
 			
 		# This will be used later in move ordering, its generally good to try the best move we found last time
 		# first whenever were searching this position again in the future
-		pt_best_move = pt_entry["best_move"]			
+		pt_best_move = pt_entry["best_move"]
 
 	# If we've reached our max depth or the game is over, perform a quiescence search
 	# If the game is over, the quiescence search will just immediately return the evaluated board anyway
