@@ -1,1 +1,1 @@
-C:\pypy\pypy.exe .\qchess.py
+C:\pypy\pypy.exe .\qchess\qchess.py
