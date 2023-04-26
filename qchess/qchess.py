@@ -130,10 +130,10 @@ def score_board(board):
 
 	# Doubled / tripled pawn penalties
 	for i in range(8):
-		score += int(pawn_file_counts[WHITE][i] == 2) * DOUBLED_PAWN_PENALTY
-		score -= int(pawn_file_counts[BLACK][i] == 2) * DOUBLED_PAWN_PENALTY
-		score += int(pawn_file_counts[WHITE][i] > 2) * TRIPLED_PAWN_PENALTY
-		score -= int(pawn_file_counts[BLACK][i] > 2) * TRIPLED_PAWN_PENALTY
+		score += DOUBLED_PAWN_PENALTY if pawn_file_counts[WHITE][i] == 2 else 0
+		score -= DOUBLED_PAWN_PENALTY if pawn_file_counts[BLACK][i] == 2 else 0
+		score += TRIPLED_PAWN_PENALTY if pawn_file_counts[WHITE][i] > 2 else 0
+		score -= TRIPLED_PAWN_PENALTY if pawn_file_counts[BLACK][i] > 2 else 0
 
 	# We want the score in the current players perspective for negamax to work
 	score *= COLOR_MOD[board.turn]
@@ -486,12 +486,10 @@ def iterative_deepening(board):
 			bestmove = end_board.move_stack[len(board.move_stack)]
 
 			if is_mate_score(score):
-				print(score)
 				# Checkmate is found, report how many moves its in
 				mate_in = math.ceil((abs(CHECKMATE)-abs(score)) / 2) * COLOR_MOD[score > 0]
 				with threading.Lock(): print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
 			else:
-				print(end_board.is_checkmate())
 				# Otherwise just report centipawns score
 				with threading.Lock(): print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
 
