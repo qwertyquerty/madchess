@@ -4,7 +4,7 @@ from chess import WHITE, KING, PAWN
 from const import *
 
 def is_mate_score(score):
-	return (abs(score) - 1000) >= (CHECKMATE - 1000)
+	return abs(score) >= (CHECKMATE - 1000)
 
 def is_quiet_move(board, move, quiescence_depth=0):
 	if board.is_capture(move):

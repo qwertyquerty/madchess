@@ -77,7 +77,7 @@ def sorted_moves(moves, board, current_depth, pt_best_move = None):
 	return moves
 
 
-def score_board(board, current_depth):
+def score_board(board):
 	"""
 	Board Evaluation
 
@@ -86,10 +86,6 @@ def score_board(board, current_depth):
 	used to evaluate leaf nodes in a tree search. It will miss anything tactical
 	but should be able to recognize basic positional advantage and material values.
 	"""
-	
-	if board.is_checkmate():
-		# A checkmate will always be bad for whoevers turn it is, we add the depth so we prefer checkmates in less moves
-		return -CHECKMATE + current_depth
 	
 	if board.is_fivefold_repetition() or board.is_insufficient_material() or board.is_stalemate():
 		# Board is drawn
@@ -185,6 +181,14 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 	pv_node = beta - alpha > 1
 
+	# Mate distance pruning
+	if current_depth != 0:
+		alpha = max(alpha, -CHECKMATE + current_depth)
+		beta = min(beta, CHECKMATE - current_depth - 1)
+
+		if alpha >= beta:
+			return alpha, board
+
 	pt_hash = chess.polyglot.zobrist_hash(board) # Retrieve entry from the transposition table
 	pt_entry = position_table.get(pt_hash)
 	
@@ -192,7 +196,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 	# If we have logged this board in the transposition table already, we can load its bounds and make use of them
 	if pt_entry is not None:
-		if pt_entry["leaf_distance"] >= (max_depth-current_depth):
+		if pt_entry["leaf_distance"] >= (max_depth-current_depth) and not pv_node:
 			if pt_entry["flag"] == LOWER:
 				alpha = max(alpha, pt_entry["value"])
 			elif pt_entry["flag"] == UPPER:
@@ -208,22 +212,23 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		pt_best_move = pt_entry["best_move"]
 		score = pt_entry["value"]
 
+	if board.is_stalemate() or board.is_insufficient_material() or board.is_fivefold_repetition():
+		return 0, board
+
 	# If we've reached our max depth or the game is over, perform a quiescence search
 	# If the game is over, the quiescence search will just immediately return the evaluated board anyway
-	if current_depth >= max_depth or board.is_game_over() or board.is_fivefold_repetition():
+	if current_depth >= max_depth:
 		return quiescence(board, max_depth, max_depth, alpha, beta)
 	
 	futility_prunable = False
 
 	# Keep track of the best board we evaluate so we can return it with its full move stack later
 	best_board = board
-	best_score = -CHECKMATE - 1
-
 
 	if not pv_node and not board.is_check() and not board.is_game_over():
 		# Null move reduction
 		if can_null_move and current_depth != 0 and (max_depth-current_depth) >= 3:
-			if score is None: score = score_board(board, current_depth)
+			if score is None: score = score_board(board)
 			nmp_reduction = int(3 + (max_depth-current_depth) / 3 + min((score - beta)/200, 3)) # some magical math that just works
 
 			if nmp_reduction > 0:
@@ -236,17 +241,16 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		
 		# futility pruning
 		if (max_depth-current_depth) <= FUTILITY_DEPTH:
-			if score is None: score = score_board(board, current_depth)
+			if score is None: score = score_board(board)
 			if score + FUTILITY_MARGINS[max_depth-current_depth] < alpha:
 				futility_prunable = True
 
 		# reverse futility pruning
 		if (max_depth-current_depth) <= REVERSE_FUILITY_DEPTH:
-			if score is None: score = score_board(board, current_depth)
+			if score is None: score = score_board(board)
 			if score - REVERSE_FUTILTIY_MARGINS[max_depth-current_depth] > beta:
 				return score, board
 
-	
 	move_count = 0
 
 	# Iterate through all legal moves sorted
@@ -287,35 +291,37 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 			score = -score
 
-		# Update the lower bound
-		if score > best_score:
-			best_board = end_board
-			best_score = score
-
-			if score > alpha:
-				alpha = score
-
 		# Alpha beta pruning cutoff, if weve found the opponent can force a move thats
 		# worse for us than they can force in a previous board state we analyzed, then
 		# we dont need to evaluate this subtree any further because we know they will
 		# always play that move thats worse for us, or something even worse
-		if alpha >= beta:
+		if score >= beta:
 			if is_quiet:
 				killer_moves[current_depth].insert(0, move)
 
 			best_board = end_board
-			break
+
+			if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
+				position_table[pt_hash] = {"flag": LOWER, "leaf_distance": max_depth-current_depth, "value": beta, "board": best_board, "best_move": move}
+
+			return beta, best_board
+	
+		# Update the lower bound
+		if score > alpha:
+			alpha = score
+			best_board = end_board
+
+	if board.is_game_over():
+		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
+		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
+			position_table[pt_hash] = {"flag": EXACT, "leaf_distance": max_depth-current_depth, "value": score, "board": board, "best_move": None}
+		
+		return score, board
 
 	# Update the transposition table with the new information we've learned about this position
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-		flag = (UPPER if alpha <= alpha_orig else (LOWER if alpha >= beta else EXACT)) 
-		position_table[pt_hash] = {
-			"flag": flag,
-			"leaf_distance": max_depth-current_depth,
-			"value": alpha,
-			"board": best_board,
-			"best_move": best_board.move_stack[len(board.move_stack)] if len(best_board.move_stack) > len(board.move_stack) else None
-		}
+		flag = UPPER if alpha <= alpha_orig else EXACT 
+		position_table[pt_hash] = {"flag": flag, "leaf_distance": max_depth-current_depth, "value": alpha, "board": best_board, "best_move": best_board.move_stack[len(board.move_stack)] if len(best_board.move_stack) > len(board.move_stack) else None}
 
 	return alpha, best_board
 
@@ -337,7 +343,7 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 	nodes += 1
 
 	# Get the positional evaluation of the current board
-	score = score_board(board, current_depth)
+	score = score_board(board)
 
 	# We beta cutoff early in quiescence
 	if score >= beta:
@@ -439,7 +445,7 @@ def iterative_deepening(board):
 	killer_moves = [[] for _ in range(MAX_DEPTH)]
 
 	# This is our first aspiration window guess, before we search depth 1
-	gamma = score_board(board, 0)
+	gamma = score_board(board)
 
 	# Iterative deepening
 	while not stop and depth < MAX_DEPTH:
@@ -455,8 +461,12 @@ def iterative_deepening(board):
 			score, end_board = alpha_beta(board, 0, depth, alpha, beta)
 
 			# If this happens it means we stopped mid search so just end the search
-			if score == None:
+			if score is None:
 				break
+
+			# Our next aspiration table guess is the value we gave the board at this depth
+			# because we would expect it shouldn't change too much in the next depth
+			gamma = score
 
 			# If we end up outside the aspiration window bounds, we need to make them wider and re search
 			if score <= alpha:
@@ -475,21 +485,15 @@ def iterative_deepening(board):
 			pv_string = f"pv {' '.join([str(move) for move in end_board.move_stack[len(board.move_stack):]])}" # move preview
 			bestmove = end_board.move_stack[len(board.move_stack)]
 
-			if end_board.is_checkmate():
+			if is_mate_score(score):
+				print(score)
 				# Checkmate is found, report how many moves its in
-				mate_in = math.ceil((len(end_board.move_stack) - len(board.move_stack)) / 2) * COLOR_MOD[score > 0]
+				mate_in = math.ceil((abs(CHECKMATE)-abs(score)) / 2) * COLOR_MOD[score > 0]
 				with threading.Lock(): print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
 			else:
+				print(end_board.is_checkmate())
 				# Otherwise just report centipawns score
 				with threading.Lock(): print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
-
-			# Once a mate is found, it wont do us any better to try to find it again in more moves
-			if end_board.is_checkmate():
-				break
-
-			# Our next aspiration table guess is the value we gave the board at this depth
-			# because we would expect it shouldn't change too much in the next depth
-			gamma = score
 
 			# Prepare for the next search
 			depth += 1
