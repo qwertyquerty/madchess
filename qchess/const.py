@@ -55,9 +55,11 @@ QUIESCENCE_CHECK_DEPTH_LIMIT = 3
 
 ## Aspiration Windows ##
 # How big (+/-) the aspiration window is around gamma
-ASPIRATION_WINDOW_DEFAULT = CP_PIECE_VALUES[PAWN] // 4
+ASPIRATION_WINDOW_DEFAULT = CP_PIECE_VALUES[PAWN]
 # If the real value is outside of the aspiration window, multiply the limiting bound by this
 ASPIRATION_INCREASE_EXPONENT = 4
+# Only use aspiration windows at this depth or greater
+ASPIRATION_WINDOW_DEPTH = 5
 
 ## Futility Pruning ##
 FUTILITY_MARGINS = (0, 100, 200, 300, 400, 500)

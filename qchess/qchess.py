@@ -452,30 +452,38 @@ def iterative_deepening(board):
 		aspw_lower = -ASPIRATION_WINDOW_DEFAULT
 		aspw_higher = ASPIRATION_WINDOW_DEFAULT
 
-		while True:
-			# We set our bounds to be the size of our aspiration window around our guess (gamma)
-			alpha = gamma + aspw_lower
-			beta = gamma + aspw_higher
+		if depth >= ASPIRATION_WINDOW_DEPTH:
+			while True:
+				# We set our bounds to be the size of our aspiration window around our guess (gamma)
+				alpha = gamma + aspw_lower
+				beta = gamma + aspw_higher
 
-			# Perform the alpha beta search
-			score, end_board = alpha_beta(board, 0, depth, alpha, beta)
+				# Perform the alpha beta search
+				score, end_board = alpha_beta(board, 0, depth, alpha, beta)
 
-			# If this happens it means we stopped mid search so just end the search
-			if score is None:
-				break
+				# If this happens it means we stopped mid search so just end the search
+				if score is None:
+					break
 
-			# Our next aspiration table guess is the value we gave the board at this depth
-			# because we would expect it shouldn't change too much in the next depth
+				# Our next aspiration table guess is the value we gave the board at this depth
+				# because we would expect it shouldn't change too much in the next depth	
+				gamma = score
+
+				# If we end up outside the aspiration window bounds, we need to make them wider and re search
+				if score <= alpha:
+					print(score, "low cut")
+					aspw_lower *= ASPIRATION_INCREASE_EXPONENT
+				elif score >= beta:
+					print(score, "high cut")
+					aspw_higher *= ASPIRATION_INCREASE_EXPONENT
+				else:
+					# If were inside the bounds, then we can proceed to the next depth
+					break
+				
+		else:
+			score, end_board = alpha_beta(board, 0, depth, -CHECKMATE, CHECKMATE)
 			gamma = score
 
-			# If we end up outside the aspiration window bounds, we need to make them wider and re search
-			if score <= alpha:
-				aspw_lower *= ASPIRATION_INCREASE_EXPONENT
-			elif score >= beta:
-				aspw_higher *= ASPIRATION_INCREASE_EXPONENT
-			else:
-				# If were inside the bounds, then we can proceed to the next depth
-				break
 
 		# UCI reporting
 		if score is not None:
