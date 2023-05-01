@@ -248,6 +248,10 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 			if nmp_reduction > 0:
 				board.push(chess.Move.null())
 				score, _ = alpha_beta(board, current_depth + nmp_reduction, max_depth, -beta, -beta+1, can_null_move=False)
+
+				if score is None:
+					return None, None
+
 				score = -score
 				board.pop()
 				if score >= beta and not is_mate_score(score):
@@ -382,6 +386,10 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 		nboard.push(move)
 
 		score, end_board = quiescence(nboard, current_depth+1, max_depth, -beta, -alpha)
+		
+		if score is None:
+			return None, None
+		
 		score = -score
 
 		if score >= beta:
@@ -516,9 +524,9 @@ def iterative_deepening(board):
 			# Prepare for the next search
 			depth += 1
 	
-	if bestmove:
+	if bestmove is not None:
 		# When we end our search (due to stop command or running out of time), report the best move we found
-		print(f"bestmove {bestmove.uci()}")
+		with threading.Lock(): print(f"bestmove {bestmove.uci()}")
 
 
 # The board used by UCI commands
@@ -535,12 +543,12 @@ while True:
 	cmd = args[0] if len(args) else None
 
 	if cmd == "uci":
-		print(f"id name {VERSION}")
-		print(f"id author {AUTHOR}")
-		print("uciok")
+		with threading.Lock(): print(f"id name {VERSION}")
+		with threading.Lock(): print(f"id author {AUTHOR}")
+		with threading.Lock(): print("uciok")
 	
 	elif cmd == "isready":
-		print("readyok")
+		with threading.Lock(): print("readyok")
 	
 	elif cmd == "quit":
 		stop = True
