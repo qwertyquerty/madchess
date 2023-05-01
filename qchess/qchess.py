@@ -562,6 +562,22 @@ while True:
 	elif cmd == "go":
 		if "movetime" in args:
 			allowed_movetime = int(args[args.index("movetime")+1])
+		elif "wtime" in args and "btime" in args:
+			wtime = int(args[args.index("wtime")+1])
+			btime = int(args[args.index("btime")+1])
+
+			if "winc" in args and "binc" in args:
+				winc = int(args[args.index("winc")+1])
+				binc = int(args[args.index("binc")+1])
+			else:
+				winc = 0
+				binc = 0
+			
+			if board.turn:
+				allowed_movetime = min(wtime / 40 + winc, max(wtime / 2 - 1000, 0))
+			else:
+				allowed_movetime = min(btime / 40 + binc, max(btime / 2 - 1000, 0))
+
 		else:
 			allowed_movetime = None
 		

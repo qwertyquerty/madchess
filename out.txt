@@ -1,0 +1,17 @@
+openuci
+openuci
+openuci
+openuci
+openuci
+openuci
+openuci
+openuci
+openuci
+openuci
+openuci
+ucinewgame
+isready
+position startpos moves e2e4
+go movetime 10000
+position startpos moves e2e4 d7d5 e4d5
+go wtime 109310 btime 118000 winc 2000 binc 2000
