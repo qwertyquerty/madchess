@@ -26,3 +26,6 @@ def is_quiet_move(board, move, quiescence_depth=0):
 			return False
 	
 	return True
+
+def lerp(start, end, position): # linear interpolation between start and end
+	return int(round((1-position) * start + position * end, 0))

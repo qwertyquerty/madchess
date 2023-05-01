@@ -1,5 +1,5 @@
 import chess
-from chess import WHITE, BLACK, KING, PAWN, BISHOP, QUEEN
+from chess import WHITE, BLACK, KING, PAWN, BISHOP, KNIGHT, ROOK, QUEEN
 import chess.polyglot
 import functools
 import math
@@ -77,6 +77,17 @@ def sorted_moves(moves, board, current_depth, pt_best_move = None):
 	return moves
 
 
+def game_phase(board): # returns a float from 0-1 representing game phase
+	remaining = 0
+	remaining += len(board.pieces(PAWN, BLACK) | board.pieces(PAWN, WHITE))
+	remaining += len(board.pieces(KNIGHT, BLACK) | board.pieces(KNIGHT, WHITE)) * 10
+	remaining += len(board.pieces(BISHOP, BLACK) | board.pieces(BISHOP, WHITE)) * 10
+	remaining += len(board.pieces(ROOK, BLACK) | board.pieces(ROOK, WHITE)) * 20
+	remaining += len(board.pieces(QUEEN, BLACK) | board.pieces(QUEEN, WHITE)) * 40
+
+	return max(0, min(1, (256-remaining)/256))
+
+
 def score_board(board):
 	"""
 	Board Evaluation
@@ -94,52 +105,49 @@ def score_board(board):
 	score = 0
 
 	# Check if we are in endgame using the amount of pieces on the board
-	endgame = len(board.piece_map()) <= ENDGAME_PIECE_COUNT
-
-	white_bishop_count = 0
-	black_bishop_count = 0
+	phase = game_phase(board)
 
 	pawn_file_counts = ([0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]) # [turn][file]
 
 	for square, piece in board.piece_map().items(): # Iterate through all pieces on the board
 		# Positional piece values, mirror the positional piece values vertically if the piece is black
-		if endgame:
-			score += ENDGAME_PIECE_POSITION_TABLES[piece.piece_type][square if piece.color == WHITE else chess.square_mirror(square)] * COLOR_MOD[piece.color]
-		else:
-			score += MIDGAME_PIECE_POSITION_TABLES[piece.piece_type][square if piece.color == WHITE else chess.square_mirror(square)] * COLOR_MOD[piece.color]
-		
+		score += lerp(
+			MIDGAME_PIECE_POSITION_TABLES[piece.piece_type][square if piece.color == WHITE else chess.square_mirror(square)],
+			ENDGAME_PIECE_POSITION_TABLES[piece.piece_type][square if piece.color == WHITE else chess.square_mirror(square)],
+			phase
+		)  * COLOR_MOD[piece.color]
+
 		score += WILL_TO_PUSH[square if piece.color == WHITE else chess.square_mirror(square)] * COLOR_MOD[piece.color]
 
 		# Piece values, add centipawn values for our pieces, subtract them for opponents pieces
-		score += (CP_PIECE_VALUES_ENDGAME[piece.piece_type] if endgame else CP_PIECE_VALUES_MIDGAME[piece.piece_type]) * COLOR_MOD[piece.color]
-	
-		if piece.piece_type == BISHOP:
-			if piece.color == WHITE:
-				white_bishop_count += 1
-			else:
-				black_bishop_count += 1
-		
-		elif piece.piece_type == PAWN:
+		score += lerp(CP_PIECE_VALUES_MIDGAME[piece.piece_type], CP_PIECE_VALUES_ENDGAME[piece.piece_type], phase) * COLOR_MOD[piece.color]
+
+		if piece.piece_type == PAWN:
 			pawn_file_counts[piece.color][chess.square_file(square)] += 1
-		
-		# Mobility
-		score += len(board.attacks(square)) * COLOR_MOD[piece.color]
+
+		if piece.piece_type != KING and piece.piece_type != PAWN:
+			score += lerp(
+				PIECE_MOBILITY_TABLES[piece.piece_type][MIDGAME][len(board.attacks(square))], # midgame
+				PIECE_MOBILITY_TABLES[piece.piece_type][ENDGAME][len(board.attacks(square))], # endgame
+				phase
+			) * COLOR_MOD[piece.color]
+
+			
 	
 	# Reward having both bishops
-	score += (int(white_bishop_count == 2) - int(black_bishop_count == 2)) * DOUBLE_BISHOP_BONUS
+	score += (int(len(board.pieces(BISHOP, WHITE)) == 2) - int(len(board.pieces(BISHOP, BLACK)) == 2)) * lerp(DOUBLE_BISHOP_BONUS_MIDGAME, DOUBLE_BISHOP_BONUS_ENDGAME, phase)
 
 	# Doubled / tripled pawn penalties
 	for i in range(8):
-		score += DOUBLED_PAWN_PENALTY if pawn_file_counts[WHITE][i] == 2 else 0
-		score -= DOUBLED_PAWN_PENALTY if pawn_file_counts[BLACK][i] == 2 else 0
-		score += TRIPLED_PAWN_PENALTY if pawn_file_counts[WHITE][i] > 2 else 0
-		score -= TRIPLED_PAWN_PENALTY if pawn_file_counts[BLACK][i] > 2 else 0
+		score += lerp(DOUBLED_PAWN_PENALTY_MIDGAME, DOUBLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[WHITE][i] == 2 else 0
+		score -= lerp(DOUBLED_PAWN_PENALTY_MIDGAME, DOUBLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[BLACK][i] == 2 else 0
+		score += lerp(TRIPLED_PAWN_PENALTY_MIDGAME, TRIPLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[WHITE][i] > 2 else 0
+		score -= lerp(TRIPLED_PAWN_PENALTY_MIDGAME, TRIPLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[BLACK][i] > 2 else 0
 
 	# We want the score in the current players perspective for negamax to work
 	score *= COLOR_MOD[board.turn]
 
-	if not endgame:
-		score += TEMPO_BONUS # small bonus for player to move
+	score += lerp(TEMPO_BONUS_MIDGAME, TEMPO_BONUS_ENDGAME, phase) # small bonus for player to move
 
 	return score
 
@@ -471,10 +479,8 @@ def iterative_deepening(board):
 
 				# If we end up outside the aspiration window bounds, we need to make them wider and re search
 				if score <= alpha:
-					print(score, "low cut")
 					aspw_lower *= ASPIRATION_INCREASE_EXPONENT
 				elif score >= beta:
-					print(score, "high cut")
 					aspw_higher *= ASPIRATION_INCREASE_EXPONENT
 				else:
 					# If were inside the bounds, then we can proceed to the next depth
