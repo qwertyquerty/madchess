@@ -34,22 +34,21 @@ PIECE_VALUES = (0, 1, 3, 3, 5, 9, 0) # pawns
 CP_PIECE_VALUES = (0, 100, 300, 300, 500, 900, 0) # centipawns
 
 # More accurate centipawn piece values based on game phase
-CP_PIECE_VALUES_MIDGAME = (0, 85, 325, 330, 444, 998, 0)
-CP_PIECE_VALUES_ENDGAME = (0, 80, 289, 318, 560, 1016, 0)
+PHASED_CP_PIECE_VALUES = (
+    (0, 85, 325, 330, 444, 998, 0), # midgame
+    (0, 80, 289, 318, 560, 1016, 0) # endgame
+)
 
 # Slight bonus for the player to move
-TEMPO_BONUS_MIDGAME = 20 # cp
-TEMPO_BONUS_ENDGAME = 0
+TEMPO_BONUS = (20, 0) # midgame, endgame
 
 # Having both bishops is mildly good
-DOUBLE_BISHOP_BONUS_MIDGAME = 34 # cp
-DOUBLE_BISHOP_BONUS_ENDGAME = 55 # cp
+DOUBLE_BISHOP_BONUS = (34, 55) # cp
 
 # Doubled / tripled pawns are bad
-DOUBLED_PAWN_PENALTY_MIDGAME = -7 # cp
-TRIPLED_PAWN_PENALTY_MIDGAME = -12 # cp
-DOUBLED_PAWN_PENALTY_ENDGAME = -20 # cp
-TRIPLED_PAWN_PENALTY_ENDGAME = -37 # cp
+DOUBLED_PAWN_PENALTY = (-7, -20) # cp
+TRIPLED_PAWN_PENALTY = (-12, -37) # cp
+ISOLATED_PAWN_PENALTY = (-7, -20)
 
 # First depth to search in iterative deepening
 STARTING_DEPTH = 1

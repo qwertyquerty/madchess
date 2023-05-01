@@ -120,7 +120,7 @@ def score_board(board):
 		score += WILL_TO_PUSH[square if piece.color == WHITE else chess.square_mirror(square)] * COLOR_MOD[piece.color]
 
 		# Piece values, add centipawn values for our pieces, subtract them for opponents pieces
-		score += lerp(CP_PIECE_VALUES_MIDGAME[piece.piece_type], CP_PIECE_VALUES_ENDGAME[piece.piece_type], phase) * COLOR_MOD[piece.color]
+		score += lerp(PHASED_CP_PIECE_VALUES[MIDGAME][piece.piece_type], PHASED_CP_PIECE_VALUES[ENDGAME][piece.piece_type], phase) * COLOR_MOD[piece.color]
 
 		if piece.piece_type == PAWN:
 			pawn_file_counts[piece.color][chess.square_file(square)] += 1
@@ -132,22 +132,28 @@ def score_board(board):
 				phase
 			) * COLOR_MOD[piece.color]
 
-			
-	
 	# Reward having both bishops
-	score += (int(len(board.pieces(BISHOP, WHITE)) == 2) - int(len(board.pieces(BISHOP, BLACK)) == 2)) * lerp(DOUBLE_BISHOP_BONUS_MIDGAME, DOUBLE_BISHOP_BONUS_ENDGAME, phase)
+	score += (int(len(board.pieces(BISHOP, WHITE)) == 2) - int(len(board.pieces(BISHOP, BLACK)) == 2)) * lerp(DOUBLE_BISHOP_BONUS[MIDGAME], DOUBLE_BISHOP_BONUS[ENDGAME], phase)
 
-	# Doubled / tripled pawn penalties
+	# pawn structure basics
 	for i in range(8):
-		score += lerp(DOUBLED_PAWN_PENALTY_MIDGAME, DOUBLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[WHITE][i] == 2 else 0
-		score -= lerp(DOUBLED_PAWN_PENALTY_MIDGAME, DOUBLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[BLACK][i] == 2 else 0
-		score += lerp(TRIPLED_PAWN_PENALTY_MIDGAME, TRIPLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[WHITE][i] > 2 else 0
-		score -= lerp(TRIPLED_PAWN_PENALTY_MIDGAME, TRIPLED_PAWN_PENALTY_ENDGAME, phase) if pawn_file_counts[BLACK][i] > 2 else 0
+		# doubled / tripled pawn penalties
+		score += lerp(DOUBLED_PAWN_PENALTY[MIDGAME], DOUBLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[WHITE][i] == 2 else 0
+		score -= lerp(DOUBLED_PAWN_PENALTY[MIDGAME], DOUBLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[BLACK][i] == 2 else 0
+		score += lerp(TRIPLED_PAWN_PENALTY[MIDGAME], TRIPLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[WHITE][i] > 2 else 0
+		score -= lerp(TRIPLED_PAWN_PENALTY[MIDGAME], TRIPLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[BLACK][i] > 2 else 0
+
+		# isolated pawn penalties
+		if pawn_file_counts[WHITE][i] > 0 and (i == 0 or pawn_file_counts[WHITE][i-1] == 0) and (i == 7 or pawn_file_counts[WHITE][i+1] == 0):
+			score += lerp(ISOLATED_PAWN_PENALTY[MIDGAME], ISOLATED_PAWN_PENALTY[ENDGAME], phase)
+		
+		if pawn_file_counts[BLACK][i] > 0 and (i == 0 or pawn_file_counts[BLACK][i-1] == 0) and (i == 7 or pawn_file_counts[BLACK][i+1] == 0):
+			score -= lerp(ISOLATED_PAWN_PENALTY[MIDGAME], ISOLATED_PAWN_PENALTY[ENDGAME], phase)
 
 	# We want the score in the current players perspective for negamax to work
 	score *= COLOR_MOD[board.turn]
 
-	score += lerp(TEMPO_BONUS_MIDGAME, TEMPO_BONUS_ENDGAME, phase) # small bonus for player to move
+	score += lerp(TEMPO_BONUS[MIDGAME], TEMPO_BONUS[ENDGAME], phase) # small bonus for player to move
 
 	return score
 
