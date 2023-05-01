@@ -16,6 +16,14 @@ EXACT = 3
 MIDGAME = 0
 ENDGAME = 1
 
+FLAG = 0
+LEAF_DIST = 1
+VALUE = 2
+BEST_MOVE = 3
+
+# PV Table Size
+PV_SIZE = 32
+
 # Used to multiply ratings based on whos turn it is
 COLOR_MOD = (-1, 1)
 
