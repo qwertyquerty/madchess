@@ -241,21 +241,13 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 	# If we have logged this board in the transposition table already, we can load its bounds and make use of them
 	if pt_entry is not None:
 		if pt_entry[LEAF_DIST] >= (max_depth-current_depth) and not pv_node:
-			usable = False
-			pt_score = None
-
 			if pt_entry[FLAG] == LOWER and pt_entry[VALUE] >= beta:
-				pt_score = beta
+				return beta
 			elif pt_entry[FLAG] == UPPER and pt_entry[VALUE] <= alpha:
-				pt_score = alpha
+				return alpha
 			elif pt_entry[FLAG] == EXACT:
-				pt_score = pt_entry[VALUE]
-			else:
-				usable = False
+				return pt_entry[VALUE]
 
-			if usable:
-				return pt_score
-			
 		# This will be used later in move ordering, its generally good to try the best move we found last time
 		# first whenever were searching this position again in the future
 		pt_best_move = pt_entry[BEST_MOVE]
