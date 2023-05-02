@@ -298,13 +298,6 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 	move_count = 0
 
-	if board.is_game_over():
-		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
-		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-			position_table[pt_hash] = (EXACT, max_depth-current_depth, score, None)
-		
-		return score
-
 	# Keep track of the best board we evaluate so we can return it with its full move stack later
 	best_move = None
 	best_score = -CHECKMATE-1
@@ -326,7 +319,12 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 		# Principal variation search
 		board.push(move)
-		score = alpha_beta(board, current_depth + 1 + reduction, max_depth, -alpha-1, -alpha)
+
+		if board.is_game_over():
+			score = -CHECKMATE + current_depth if board.is_checkmate() else 0
+		else:
+			score = alpha_beta(board, current_depth + 1 + reduction, max_depth, -alpha-1, -alpha)
+		
 		board.pop()
 
 		if score is None:
@@ -368,6 +366,13 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 			if score > alpha:
 				alpha = score
+
+	if board.is_game_over():
+		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
+		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
+			position_table[pt_hash] = (EXACT, max_depth-current_depth, score, None)
+		
+		return score
 
 	# Update the transposition table with the new information we've learned about this position
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
@@ -530,9 +535,11 @@ def iterative_deepening(board):
 		# Prepare for the next search
 		depth += 1
 	
-	if bestmove is not None:
-		# When we end our search (due to stop command or running out of time), report the best move we found
-		with threading.Lock(): print(f"bestmove {bestmove.uci()}")
+	if bestmove is None: # if we didn't find a best move in time use move ordering
+		bestmove = sorted_moves(list(board.legal_moves), board, 0)[0]
+	
+	# When we end our search (due to stop command or running out of time), report the best move we found
+	with threading.Lock(): print(f"bestmove {bestmove.uci()}")
 	
 	stop = True
 
