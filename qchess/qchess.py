@@ -471,7 +471,7 @@ def iterative_deepening(board):
 	gamma = score_board(board)
 
 	# Iterative deepening
-	while not stop and depth < MAX_DEPTH:
+	while not halted() and depth < MAX_DEPTH:
 		seldepth = 0
 
 		aspw_lower = -ASPIRATION_WINDOW_DEFAULT
