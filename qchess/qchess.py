@@ -38,13 +38,16 @@ def score_move(board, move, current_depth, phase, pt_best_move = None):
 	if move in killer_moves[current_depth]:
 		return 60000 - killer_moves[current_depth].index(move)
 
+	if len(board.move_stack) >= 2 and move == countermove_table[board.move_stack[-2].from_square][board.move_stack[-2].to_square]:
+		return 50000
+
 	if len(board.move_stack) and move.to_square == board.move_stack[-1].to_square:
 		# a simple, but quite efficient heuristic is capturing the last moved piece
-		return 50000
+		return 40000
 
 	# Oftentimes if a check is available it will be done, so look at checks earlier
 	if board.gives_check(move):
-		return 40000
+		return 30000
 
 	# Remaining passive moves
 
@@ -190,6 +193,9 @@ position_table = {}
 
 # Killer move cache, stores beta cutoff moves for move ordering in sibling nodes
 killer_moves = []
+
+# Refutation move cache
+countermove_table = []
 
 # Set to true whenever we want to cut off a current search immediately
 stop = True
@@ -353,6 +359,8 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		if score >= beta:
 			if is_quiet:
 				killer_moves[current_depth].insert(0, move)
+				if len(board.move_stack) >= 2:
+					countermove_table[board.move_stack[-2].from_square][board.move_stack[-2].to_square] = move
 
 			if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
 				position_table[pt_hash] = (LOWER, max_depth-current_depth, beta, move)
@@ -458,6 +466,7 @@ def iterative_deepening(board):
 	global nodes
 	global search_start_time
 	global killer_moves
+	global countermove_table
 	global seldepth
 
 	search_start_time = time.time()
@@ -471,6 +480,9 @@ def iterative_deepening(board):
 
 	# Fill killer moves cache with None
 	killer_moves = [[] for _ in range(MAX_DEPTH)]
+
+	# Setup refutation butterfly table
+	countermove_table = [[None for i in range(64)] for j in range(64)]
 
 	# This is our first aspiration window guess, before we search depth 1
 	gamma = score_board(board)
