@@ -26,12 +26,19 @@ Load `qchess.bat` into any UCI compliant Chess program and set the working direc
     - [x] MVV LVA
     - [x] positional changes
     - [x] best move from transposition table
+    - [x] killer move heuristic
+    - [x] countermove heuristic
 - [x] aspiration windows with gamma
-- [ ] null window
-- [ ] futility pruning
-- [ ] better quiescence
+- [x] null window
+- [x] futility pruning
+- [x] reverse futility pruning
+- [x] better quiescence
+- [x] principal variance search
+- [x] late move reductions
+- [x] null move reduction
 - [ ] scout search or MTD(f)
 - [ ] parallel processing
-- [ ] draw claims in eval function
+- [x] draw claims in eval function
 - [ ] more in depth selectivity searching
 - [ ] fully UCI compliant
+- [ ] razoring
