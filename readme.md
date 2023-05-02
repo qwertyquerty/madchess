@@ -18,31 +18,43 @@ Load `qchess.bat` into any UCI compliant Chess program and set the working direc
 ### Todo List
 
 - [x] fully documented
-- [x] alpha beta pruned minimax search
-- [x] piece specific positional evaluation
+- [x] UCI compliant
+    - [x] plays on time
+- [x] board evaluation
+    - [x] piece specific positions
+    - [x] game phase tapering
+    - [x] mobility
+    - [x] will to push
+    - [x] pawn structure
+        - [x] isolated pawns
+        - [x] doubled/tripled pawns
+        - [ ] passed pawns
+        - [ ] pawn chains
+    - [x] doubled bishops
+    - [x] material value
+- [x] minimax search
 - [x] quiescence search
 - [x] iterative deepening
 - [x] transposition tables
-    - [x] positional / best move
-- [x] move ordering
-    - [x] MVV LVA
-    - [x] positional changes
-    - [x] best move from transposition table
-    - [x] killer move heuristic
-    - [x] countermove heuristic
-    - [x] history heuristic
-    - [ ] static exchange evaluation
-- [x] aspiration windows with gamma
-- [x] null window
-- [x] futility pruning
-- [x] reverse futility pruning
-- [x] better quiescence
-- [x] principal variance search
-- [x] late move reductions
-- [x] null move reduction
-- [ ] scout search or MTD(f)
+- [x] pruning
+    - [x] alpha beta pruning
+        - [x] move ordering
+            - [x] MVV LVA
+            - [x] positional changes
+            - [x] best move from transposition table
+            - [x] retake last moved
+            - [x] killer move heuristic
+            - [x] countermove heuristic
+            - [x] history heuristic
+            - [ ] static exchange evaluation
+    - [x] aspiration windows with gamma
+    - [x] null window
+    - [x] futility pruning
+    - [x] reverse futility pruning
+    - [x] principal variance search
+    - [x] late move reductions
+    - [x] null move reduction
+    - [ ] scout search or MTD(f)
+    - [ ] razoring
 - [ ] parallel processing
-- [x] draw claims in eval function
-- [ ] more in depth selectivity searching
-- [ ] fully UCI compliant
-- [ ] razoring
+- [ ] selective searching
