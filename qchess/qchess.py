@@ -109,7 +109,7 @@ def score_board(board):
 	but should be able to recognize basic positional advantage and material values.
 	"""
 	
-	if board.can_claim_threefold_repetition() or board.is_insufficient_material() or board.is_stalemate():
+	if board.can_claim_draw() or board.is_insufficient_material() or board.is_stalemate():
 		# Board is drawn
 		return 0
 
@@ -120,53 +120,63 @@ def score_board(board):
 
 	pawn_file_counts = ([0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]) # [turn][file]
 
-	for square, piece in board.piece_map().items(): # Iterate through all pieces on the board
+	for square in range(64): # Iterate through all pieces on the board
 		# Positional piece values, mirror the positional piece values vertically if the piece is black
-		score += lerp(
-			MIDGAME_PIECE_POSITION_TABLES[piece.piece_type][square if piece.color == WHITE else chess.square_mirror(square)],
-			ENDGAME_PIECE_POSITION_TABLES[piece.piece_type][square if piece.color == WHITE else chess.square_mirror(square)],
-			phase
-		)  * COLOR_MOD[piece.color]
+		piece_type = board.piece_type_at(square)
 
-		score += WILL_TO_PUSH[square if piece.color == WHITE else chess.square_mirror(square)] * COLOR_MOD[piece.color]
+		if piece_type is not None:
+			piece_color = board.color_at(square)
+			color_mod = COLOR_MOD[piece_color]
 
-		# Piece values, add centipawn values for our pieces, subtract them for opponents pieces
-		score += lerp(PHASED_CP_PIECE_VALUES[MIDGAME][piece.piece_type], PHASED_CP_PIECE_VALUES[ENDGAME][piece.piece_type], phase) * COLOR_MOD[piece.color]
+			pov_square = square if piece_color == WHITE else chess.square_mirror(square)
 
-		if piece.piece_type == PAWN:
-			pawn_file_counts[piece.color][chess.square_file(square)] += 1
-
-		if piece.piece_type != KING and piece.piece_type != PAWN:
 			score += lerp(
-				PIECE_MOBILITY_TABLES[piece.piece_type][MIDGAME][len(board.attacks(square))], # midgame
-				PIECE_MOBILITY_TABLES[piece.piece_type][ENDGAME][len(board.attacks(square))], # endgame
+				MIDGAME_PIECE_POSITION_TABLES[piece_type][pov_square],
+				ENDGAME_PIECE_POSITION_TABLES[piece_type][pov_square],
 				phase
-			) * COLOR_MOD[piece.color]
+			) * color_mod
+
+			score += chess.square_rank(pov_square) * WILL_TO_PUSH * color_mod
+
+			# Piece values, add centipawn values for our pieces, subtract them for opponents pieces
+			score += lerp(PHASED_CP_PIECE_VALUES[MIDGAME][piece_type], PHASED_CP_PIECE_VALUES[ENDGAME][piece_type], phase) * color_mod
+
+			if piece_type == PAWN:
+				pawn_file_counts[piece_color][chess.square_file(square)] += 1
+
+			score += lerp(
+				PIECE_MOBILITY_TABLES[piece_type][MIDGAME][len(board.attacks(square))], # midgame
+				PIECE_MOBILITY_TABLES[piece_type][ENDGAME][len(board.attacks(square))], # endgame
+				phase
+			) * color_mod
 
 	# Reward having both bishops
-	score += (int(len(board.pieces(BISHOP, WHITE)) == 2) - int(len(board.pieces(BISHOP, BLACK)) == 2)) * lerp(DOUBLE_BISHOP_BONUS[MIDGAME], DOUBLE_BISHOP_BONUS[ENDGAME], phase)
+	dbb = lerp(DOUBLE_BISHOP_BONUS[MIDGAME], DOUBLE_BISHOP_BONUS[ENDGAME], phase)
+	score += (dbb if len(board.pieces(BISHOP, WHITE)) == 2 else 0) - (dbb if len(board.pieces(BISHOP, BLACK)) == 2 else 0)
 
 	# pawn structure basics
 	for i in range(8):
 		# doubled / tripled pawn penalties
-		score += lerp(DOUBLED_PAWN_PENALTY[MIDGAME], DOUBLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[WHITE][i] == 2 else 0
-		score -= lerp(DOUBLED_PAWN_PENALTY[MIDGAME], DOUBLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[BLACK][i] == 2 else 0
-		score += lerp(TRIPLED_PAWN_PENALTY[MIDGAME], TRIPLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[WHITE][i] > 2 else 0
-		score -= lerp(TRIPLED_PAWN_PENALTY[MIDGAME], TRIPLED_PAWN_PENALTY[ENDGAME], phase) if pawn_file_counts[BLACK][i] > 2 else 0
+		dpp = lerp(DOUBLED_PAWN_PENALTY[MIDGAME], DOUBLED_PAWN_PENALTY[ENDGAME], phase)
+		tpp = lerp(DOUBLED_PAWN_PENALTY[MIDGAME], DOUBLED_PAWN_PENALTY[ENDGAME], phase)
+		ipp = lerp(ISOLATED_PAWN_PENALTY[MIDGAME], ISOLATED_PAWN_PENALTY[ENDGAME], phase)
+
+		score += (dpp if pawn_file_counts[WHITE][i] == 2 else 0) - (dpp if pawn_file_counts[BLACK][i] == 2 else 0)
+		score += (tpp if pawn_file_counts[WHITE][i] > 2 else 0) - (tpp if pawn_file_counts[BLACK][i] > 2 else 0)
 
 		# isolated pawn penalties
 		if pawn_file_counts[WHITE][i] > 0 and (i == 0 or pawn_file_counts[WHITE][i-1] == 0) and (i == 7 or pawn_file_counts[WHITE][i+1] == 0):
-			score += lerp(ISOLATED_PAWN_PENALTY[MIDGAME], ISOLATED_PAWN_PENALTY[ENDGAME], phase)
+			score += ipp
 		
 		if pawn_file_counts[BLACK][i] > 0 and (i == 0 or pawn_file_counts[BLACK][i-1] == 0) and (i == 7 or pawn_file_counts[BLACK][i+1] == 0):
-			score -= lerp(ISOLATED_PAWN_PENALTY[MIDGAME], ISOLATED_PAWN_PENALTY[ENDGAME], phase)
+			score -= ipp
 
 	# We want the score in the current players perspective for negamax to work
 	score *= COLOR_MOD[board.turn]
 
 	score += lerp(TEMPO_BONUS[MIDGAME], TEMPO_BONUS[ENDGAME], phase) # small bonus for player to move
 
-	return int(score)
+	return score
 
 
 ## Global Variables ##
@@ -180,9 +190,6 @@ position_table = {}
 
 # Killer move cache, stores beta cutoff moves for move ordering in sibling nodes
 killer_moves = []
-
-# PV table
-pv_table = [[None for i in range(PV_SIZE)] for i in range(PV_SIZE)]
 
 # Set to true whenever we want to cut off a current search immediately
 stop = True
@@ -200,8 +207,8 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 	the final evaluation of the input board along with the expected line
 	"""
 	
-	if stop:
-		return None # Immediately return up the stack if stopped
+	if halted():
+		return # Immediately return up the stack if stopped
 	
 	global nodes
 	nodes += 1
@@ -241,9 +248,6 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 				usable = False
 
 			if usable:
-				if pt_score > alpha and pt_score < beta:
-					update_pv_table(pv_table, pt_entry[BEST_MOVE], current_depth, current_depth==(max_depth-1))
-				
 				return pt_score
 			
 		# This will be used later in move ordering, its generally good to try the best move we found last time
@@ -273,7 +277,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 				board.pop()
 
 				if score is None:
-					return None
+					return
 
 				score = -score
 				
@@ -294,8 +298,16 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 	move_count = 0
 
+	if board.is_game_over():
+		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
+		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
+			position_table[pt_hash] = (EXACT, max_depth-current_depth, score, None)
+		
+		return score
+
 	# Keep track of the best board we evaluate so we can return it with its full move stack later
 	best_move = None
+	best_score = -CHECKMATE-1
 
 	# Iterate through all legal moves sorted
 	for move in sorted_moves(board.legal_moves, board, current_depth, pt_best_move=pt_best_move):
@@ -315,10 +327,10 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		# Principal variation search
 		board.push(move)
 		score = alpha_beta(board, current_depth + 1 + reduction, max_depth, -alpha-1, -alpha)
-
+		board.pop()
 
 		if score is None:
-			return None
+			return
 		
 		# This is for negamax, which is a minimax framework where we can just negate the score
 		# and bounds for each recursive call and it acts as if weve swapped perspectives
@@ -327,14 +339,14 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 		if (score > alpha) and (score < beta):
 			# Evaluate the move by recursively calling alpha beta
+			board.push(move)
 			score = alpha_beta(board, current_depth + 1, max_depth, -beta, -alpha)
+			board.pop()
 
 			if score is None:
-				return None
+				return
 
 			score = -score
-
-		board.pop()
 
 		# Alpha beta pruning cutoff, if weve found the opponent can force a move thats
 		# worse for us than they can force in a previous board state we analyzed, then
@@ -350,18 +362,12 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 			return beta
 	
 		# Update the lower bound
-		if score > alpha:
-			alpha = score
+		if score > best_score:
+			best_score = score
 			best_move = move
-			update_pv_table(pv_table, move, current_depth, current_depth == (max_depth-1))
 
-
-	if board.is_game_over():
-		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
-		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-			position_table[pt_hash] = (EXACT, max_depth-current_depth, score, None)
-		
-		return score
+			if score > alpha:
+				alpha = score	
 
 	# Update the transposition table with the new information we've learned about this position
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
@@ -413,9 +419,6 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 		board.push(move)
 		score = quiescence(board, current_depth+1, max_depth, -beta, -alpha)
 		board.pop()
-
-		if score is None:
-			return None
 		
 		score = -score
 
@@ -426,36 +429,8 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 
 	return alpha
 
-
-def info_loop():
-	"""
-	Info Loop
-
-	This is just a basic loop that runs in a separate thread to report nodes per
-	second and some other info for UCI. It also handles limited movetime stop signals
-	but I'll probably move that out of here eventually
-	"""
-
-	global stop
-	start = time.time()
-	offset = 0
-
-	n = 0
-	while not stop:
-		time.sleep(0.05)
-
-		if allowed_movetime is not None and int((time.time()-search_start_time) * 1000) >= allowed_movetime:
-			stop = True
-
-		if n % 5 == 0:
-			end = time.time()
-			nps = (nodes-offset) / (end - start)
-			offset = nodes
-			start = time.time()
-			with threading.Lock():
-				print(f"info nodes {nodes} nps {int(nps)} time {int((time.time()-search_start_time) * 1000)} hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}")
-		
-		n += 1
+def halted():
+	return stop or (allowed_movetime is not None and int((time.time()-search_start_time) * 1000) >= allowed_movetime)
 
 def iterative_deepening(board):
 	"""
@@ -499,8 +474,6 @@ def iterative_deepening(board):
 	while not stop and depth < MAX_DEPTH:
 		seldepth = 0
 
-		clear_pv_table(pv_table)
-
 		aspw_lower = -ASPIRATION_WINDOW_DEFAULT
 		aspw_higher = ASPIRATION_WINDOW_DEFAULT
 
@@ -537,27 +510,31 @@ def iterative_deepening(board):
 
 		# UCI reporting
 		if score is not None:
-			pv_line = generate_pv_line(pv_table)
+			pv_line = generate_pv_line(board, position_table)
 			depth_string = f"depth {depth} seldepth {seldepth}" # full search depth / quiescence search depth
 			time_string = f"time {int((time.time()-search_start_time) * 1000)}" # time spent searching this position
 			hashfull_string = f"hashfull {int(len(position_table) / MAX_PTABLE_SIZE * 1000)}" # how full the transposition table is
 			pv_string = f"pv {' '.join([str(move) for move in pv_line])}" # move preview
+			nodes_per_second = int(nodes / (time.time()-search_start_time))
+
 			bestmove = pv_line[0]
 
 			if is_mate_score(score):
 				# Checkmate is found, report how many moves its in
-				mate_in = math.ceil((abs(CHECKMATE)-abs(score)) / 2) * COLOR_MOD[score > 0]
-				with threading.Lock(): print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
+				mate_in = math.ceil(len(pv_line) / 2) * COLOR_MOD[score > 0]
+				with threading.Lock(): print(f"info nodes {nodes} nps {nodes_per_second} {time_string} {hashfull_string} {depth_string} score mate {mate_in} {pv_string}")
 			else:
 				# Otherwise just report centipawns score
-				with threading.Lock(): print(f"info nodes {nodes} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
+				with threading.Lock(): print(f"info nodes {nodes} nps {nodes_per_second} {time_string} {hashfull_string} {depth_string} score cp {score} {pv_string}")
 
-			# Prepare for the next search
-			depth += 1
+		# Prepare for the next search
+		depth += 1
 	
 	if bestmove is not None:
 		# When we end our search (due to stop command or running out of time), report the best move we found
 		with threading.Lock(): print(f"bestmove {bestmove.uci()}")
+	
+	stop = True
 
 
 # The board used by UCI commands
@@ -565,71 +542,68 @@ board = chess.Board()
 
 # Threads
 search_thread = None
-node_info_thread = None
 
-while True:
-	# UCI implementation
-	line = input()
-	args = line.split()
-	cmd = args[0] if len(args) else None
+if __name__ == "__main__":
+	while True:
+		# UCI implementation
+		line = input()
+		args = line.split()
+		cmd = args[0] if len(args) else None
 
-	if cmd == "uci":
-		with threading.Lock(): print(f"id name {VERSION}")
-		with threading.Lock(): print(f"id author {AUTHOR}")
-		with threading.Lock(): print("uciok")
-	
-	elif cmd == "isready":
-		with threading.Lock(): print("readyok")
-	
-	elif cmd == "quit":
-		stop = True
-		break
-
-	elif cmd == "position":
-		if "fen" in args: # load position from FEN
-			fen = line.split(" fen ")[1].split("moves")[0]
-			board = chess.Board(fen=fen)
+		if cmd == "uci":
+			with threading.Lock(): print(f"id name {VERSION}")
+			with threading.Lock(): print(f"id author {AUTHOR}")
+			with threading.Lock(): print("uciok")
 		
-		elif "startpos" in args: # standard chess starting position
-			board = chess.Board()
-			
-		if "moves" in args: # load position from list of moves
-			moves = line.split(" moves ")[1].split()
-			for move in moves:
-				board.push(chess.Move.from_uci(move))
-			
-	elif cmd == "go":
-		if "movetime" in args:
-			allowed_movetime = int(args[args.index("movetime")+1])
-		elif "wtime" in args and "btime" in args:
-			wtime = int(args[args.index("wtime")+1])
-			btime = int(args[args.index("btime")+1])
-
-			if "winc" in args and "binc" in args:
-				winc = int(args[args.index("winc")+1])
-				binc = int(args[args.index("binc")+1])
-			else:
-				winc = 0
-				binc = 0
-			
-			if board.turn:
-				allowed_movetime = min(wtime / 40 + winc, max(wtime / 2 - 1000, 0))
-			else:
-				allowed_movetime = min(btime / 40 + binc, max(btime / 2 - 1000, 0))
-
-		else:
-			allowed_movetime = None
+		elif cmd == "isready":
+			with threading.Lock(): print("readyok")
 		
-		if stop:
-			# Begin our search by starting up the threads
-			search_thread = threading.Thread(target=lambda: iterative_deepening(board), daemon=True)
-			node_info_thread = threading.Thread(target=lambda: info_loop(), daemon=True)
-			search_thread.start()
-			node_info_thread.start()
-
-	elif cmd == "stop":
-		if not stop:
+		elif cmd == "quit":
 			stop = True
-			while search_thread.is_alive() or node_info_thread.is_alive():
-				# Wait for threads to recieve stop signal before proceeding
-				pass
+			break
+
+		elif cmd == "position":
+			if "fen" in args: # load position from FEN
+				fen = line.split(" fen ")[1].split("moves")[0]
+				board = chess.Board(fen=fen)
+			
+			elif "startpos" in args: # standard chess starting position
+				board = chess.Board()
+				
+			if "moves" in args: # load position from list of moves
+				moves = line.split(" moves ")[1].split()
+				for move in moves:
+					board.push(chess.Move.from_uci(move))
+				
+		elif cmd == "go":
+			if "movetime" in args:
+				allowed_movetime = int(args[args.index("movetime")+1])
+			elif "wtime" in args and "btime" in args:
+				wtime = int(args[args.index("wtime")+1])
+				btime = int(args[args.index("btime")+1])
+
+				if "winc" in args and "binc" in args:
+					winc = int(args[args.index("winc")+1])
+					binc = int(args[args.index("binc")+1])
+				else:
+					winc = 0
+					binc = 0
+				
+				if board.turn:
+					allowed_movetime = min(wtime / 40 + winc, max(wtime / 2 - 1000, 0))
+				else:
+					allowed_movetime = min(btime / 40 + binc, max(btime / 2 - 1000, 0))
+
+			else:
+				allowed_movetime = None
+			
+			if stop:
+				# Begin our search by starting up the threads
+				search_thread = threading.Thread(target=lambda: iterative_deepening(board), daemon=True)
+				search_thread.start()
+
+		elif cmd == "stop":
+			if not stop:
+				stop = True
+				while search_thread.is_alive():
+					pass
