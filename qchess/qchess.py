@@ -29,7 +29,7 @@ def score_move(board, move, current_depth, phase, pt_best_move = None):
 
 	# Promotions, we like to look at them first since they're momentuous moves
 	if move.promotion == QUEEN:
-		return 80000 + CP_PIECE_VALUES[move.promotion]
+		return 80000
 
 	if victim is not None:
 		# MVV LVA, we prefer to take the most valuable victim with the least valuable attacker
@@ -48,6 +48,8 @@ def score_move(board, move, current_depth, phase, pt_best_move = None):
 	# Oftentimes if a check is available it will be done, so look at checks earlier
 	if board.gives_check(move):
 		return 30000
+
+	score += history_table[board.turn][move.from_square][move.to_square]
 
 	# Remaining passive moves
 
@@ -196,6 +198,9 @@ killer_moves = []
 
 # Refutation move cache
 countermove_table = []
+
+# History heuristic table
+history_table = []
 
 # Set to true whenever we want to cut off a current search immediately
 stop = True
@@ -350,7 +355,16 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		# always play that move thats worse for us, or something even worse
 		if score >= beta:
 			if is_quiet:
+				# Killer move heuristic
 				killer_moves[current_depth].insert(0, move)
+
+				# History heuristic
+				history_table[board.turn][move.from_square][move.to_square] += (max_depth-current_depth)**2
+
+				if history_table[board.turn][move.from_square][move.to_square] >= MAX_HISTORY_VALUE:
+					shrink_history(history_table)
+				
+				# Countermove heuristic
 				if len(board.move_stack) >= 2:
 					countermove_table[board.move_stack[-2].from_square][board.move_stack[-2].to_square] = move
 
@@ -459,6 +473,7 @@ def iterative_deepening(board):
 	global search_start_time
 	global killer_moves
 	global countermove_table
+	global history_table
 	global seldepth
 
 	search_start_time = time.time()
@@ -475,6 +490,9 @@ def iterative_deepening(board):
 
 	# Setup refutation butterfly table
 	countermove_table = [[None for i in range(64)] for j in range(64)]
+
+	# Setup history butterfly table
+	history_table = [[[0 for i in range(64)] for j in range(64)] for k in range(2)]
 
 	# This is our first aspiration window guess, before we search depth 1
 	gamma = score_board(board)

@@ -86,6 +86,11 @@ LATE_MOVE_REDUCTION_LEAF_DISTANCE = 3
 LATE_MOVE_REDUCTION_TABLE_SIZE = 32
 LATE_MOVE_REDUCTION_TABLE = [[int(0.25 * math.log(i) * math.log(j) + 0.7) for j in range(1, LATE_MOVE_REDUCTION_TABLE_SIZE+1)] for i in range(1, LATE_MOVE_REDUCTION_TABLE_SIZE+1)]
 
+# History Heuristic
+MAX_HISTORY_VALUE = 10000
+HISTORY_SHRINK_FACTOR = 2
+
+
 ## Positional values ##
 # Ratings for piece positionally in midgame, (first rank is on top)
 MIDGAME_PIECE_POSITION_TABLES = (

@@ -28,6 +28,8 @@ Load `qchess.bat` into any UCI compliant Chess program and set the working direc
     - [x] best move from transposition table
     - [x] killer move heuristic
     - [x] countermove heuristic
+    - [x] history heuristic
+    - [ ] static exchange evaluation
 - [x] aspiration windows with gamma
 - [x] null window
 - [x] futility pruning

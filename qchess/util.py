@@ -31,6 +31,12 @@ def is_quiet_move(board, move, quiescence_depth=0):
 def lerp(start, end, position): # linear interpolation between start and end
 	return int((1-position) * start + position * end)
 
+def shrink_history(table):
+	for i in range(len(table)):
+		for j in range(len(table[0])):
+			for k in range(len(table[0][0])):
+				table[i][j][k] = table[i][j][k] // HISTORY_SHRINK_FACTOR
+
 def generate_pv_line(board, table):
 	nboard = board.copy()
 	
