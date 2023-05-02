@@ -38,10 +38,13 @@ def generate_pv_line(board, table):
 
 	zh = chess.polyglot.zobrist_hash(nboard)
 
-	while zh in table:
+	hashes = set()
+
+	while zh in table and zh not in hashes:
 		if table[zh][BEST_MOVE] is not None:
 			pv.append(table[zh][BEST_MOVE])
 			nboard.push(table[zh][BEST_MOVE])
+			hashes.add(zh)
 			zh = chess.polyglot.zobrist_hash(nboard)
 		else:
 			break

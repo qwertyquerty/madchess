@@ -367,7 +367,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 			best_move = move
 
 			if score > alpha:
-				alpha = score	
+				alpha = score
 
 	# Update the transposition table with the new information we've learned about this position
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
@@ -419,7 +419,7 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 		board.push(move)
 		score = quiescence(board, current_depth+1, max_depth, -beta, -alpha)
 		board.pop()
-		
+
 		score = -score
 
 		if score >= beta:
