@@ -2,6 +2,8 @@
 
 Simple Alpha Beta UCI Compliant Chess Engine in Python
 
+*Currently the strongest Python Chess engine*
+
 ***Running this engine with pypy is heavily recommended***
 
 ### Installation
