@@ -597,9 +597,9 @@ if __name__ == "__main__":
 					binc = 0
 				
 				if board.turn:
-					allowed_movetime = max(min(wtime / 40 + winc, max(wtime / 2 - 1000, 0)), 100)
+					allowed_movetime = max(min(wtime / 40 + winc, max(wtime / 2 - 1000, 0)), 50)
 				else:
-					allowed_movetime = max(min(btime / 40 + binc, max(btime / 2 - 1000, 0)), 100)
+					allowed_movetime = max(min(btime / 40 + binc, max(btime / 2 - 1000, 0)), 50)
 
 			else:
 				allowed_movetime = None
