@@ -34,6 +34,7 @@ Load `qchess.bat` into any UCI compliant Chess program and set the working direc
     - [x] material value
 - [x] minimax search
 - [x] quiescence search
+    - [x] delta pruning
 - [x] iterative deepening
 - [x] transposition tables
 - [x] pruning

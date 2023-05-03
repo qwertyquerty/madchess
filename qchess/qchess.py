@@ -421,6 +421,10 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 	if score >= beta:
 		return beta
 
+	# Delta pruning
+	if score < (alpha - DELTA_PRUNING_CUTOFF):
+		return alpha
+
 	alpha = max(alpha, score)
 
 	# Filter moves to only be "loud" moves including captures, promotions or checks

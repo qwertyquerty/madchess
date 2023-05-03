@@ -90,6 +90,8 @@ LATE_MOVE_REDUCTION_TABLE = [[int(0.25 * math.log(i) * math.log(j) + 0.7) for j 
 MAX_HISTORY_VALUE = 10000
 HISTORY_SHRINK_FACTOR = 2
 
+## Delta Pruning
+DELTA_PRUNING_CUTOFF = 1000
 
 ## Positional values ##
 # Ratings for piece positionally in midgame, (first rank is on top)
