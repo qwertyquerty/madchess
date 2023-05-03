@@ -12,7 +12,7 @@ from util import *
 print = functools.partial(print, flush=True) # used to fix stdout for UCI
 
 
-def score_move(board, move, current_depth, phase, pt_best_move = None):
+def score_move(board, move, level, phase, pt_best_move = None):
 	"""
 	Used to score individual moves for move ordering, essentially
 	a guess at how likely any given move is to be the correct move
@@ -35,8 +35,8 @@ def score_move(board, move, current_depth, phase, pt_best_move = None):
 		# MVV LVA, we prefer to take the most valuable victim with the least valuable attacker
 		return 70000 + lerp(PHASED_CP_PIECE_VALUES[MIDGAME][victim.piece_type], PHASED_CP_PIECE_VALUES[ENDGAME][victim.piece_type], phase) - lerp(PHASED_CP_PIECE_VALUES[MIDGAME][attacker.piece_type], PHASED_CP_PIECE_VALUES[MIDGAME][attacker.piece_type], phase)
 
-	if move in killer_moves[current_depth]:
-		return 60000 - killer_moves[current_depth].index(move)
+	if move in killer_moves[level]:
+		return 60000 - killer_moves[level].index(move)
 
 	if len(board.move_stack) >= 2 and move == countermove_table[board.move_stack[-2].from_square][board.move_stack[-2].to_square]:
 		return 50000
@@ -73,7 +73,7 @@ def score_move(board, move, current_depth, phase, pt_best_move = None):
 	return score
 
 
-def sorted_moves(moves, board, current_depth, pt_best_move = None):
+def sorted_moves(moves, board, level, pt_best_move = None):
 	"""
 	Move Ordering
 
@@ -89,7 +89,7 @@ def sorted_moves(moves, board, current_depth, pt_best_move = None):
 	phase = game_phase(board)
 
 	moves = list(moves)
-	moves.sort(key=lambda move: score_move(board, move, current_depth, phase, pt_best_move), reverse=True)
+	moves.sort(key=lambda move: score_move(board, move, level, phase, pt_best_move), reverse=True)
 	return moves
 
 
@@ -209,7 +209,7 @@ stop = True
 seldepth = 0
 
 
-def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True):
+def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 	"""
 	Alpha Beta Minimax Search
 
@@ -233,9 +233,9 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 	pv_node = beta - alpha > 1
 
 	# Mate distance pruning
-	if current_depth != 0:
-		alpha = max(alpha, -CHECKMATE + current_depth)
-		beta = min(beta, CHECKMATE - current_depth - 1)
+	if level != 0:
+		alpha = max(alpha, -CHECKMATE + level)
+		beta = min(beta, CHECKMATE - level - 1)
 
 		if alpha >= beta:
 			return alpha
@@ -247,7 +247,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 	# If we have logged this board in the transposition table already, we can load its bounds and make use of them
 	if pt_entry is not None:
-		if pt_entry[LEAF_DIST] >= (max_depth-current_depth) and not pv_node:
+		if pt_entry[LEAF_DIST] >= depth and not pv_node:
 			if pt_entry[FLAG] == LOWER and pt_entry[VALUE] >= beta:
 				return beta
 			elif pt_entry[FLAG] == UPPER and pt_entry[VALUE] <= alpha:
@@ -262,20 +262,20 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 	# If we've reached our max depth or the game is over, perform a quiescence search
 	# If the game is over, the quiescence search will just immediately return the evaluated board anyway
-	if current_depth >= max_depth:
-		return quiescence(board, max_depth, max_depth, alpha, beta)
+	if depth <= 0:
+		return quiescence(board, depth, level, alpha, beta)
 	
 	futility_prunable = False
 
-	if not pv_node and not board.is_check() and not game_over:
+	if not pv_node and not game_over and not board.is_check():
 		# Null move reduction
-		if can_null_move and current_depth != 0 and (max_depth-current_depth) >= 3:
+		if can_null_move and level != 0 and depth >= 3:
 			if score is None: score = score_board(board)
-			nmp_reduction = int(3 + (max_depth-current_depth) / 3 + min((score - beta)/200, 3)) # some magical math that just works
+			nmp_reduction = int(3 + depth / 3 + min((score - beta)/200, 3)) # some magical math that just works
 
 			if nmp_reduction > 0:
 				board.push(chess.Move.null())
-				score = alpha_beta(board, current_depth + nmp_reduction, max_depth, -beta, -beta+1, can_null_move=False)
+				score = alpha_beta(board, depth - nmp_reduction, level+1, -beta, -beta+1, can_null_move=False)
 				board.pop()
 
 				if score is None:
@@ -287,21 +287,21 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 					return beta
 		
 		# futility pruning
-		if (max_depth-current_depth) <= FUTILITY_DEPTH:
+		if depth <= FUTILITY_DEPTH:
 			if score is None: score = score_board(board)
-			if score + FUTILITY_MARGINS[max_depth-current_depth] < alpha:
+			if score + FUTILITY_MARGINS[depth] < alpha:
 				futility_prunable = True
 
 		# reverse futility pruning
-		if (max_depth-current_depth) <= REVERSE_FUILITY_DEPTH:
+		if depth <= REVERSE_FUILITY_DEPTH:
 			if score is None: score = score_board(board)
-			if score - REVERSE_FUTILTIY_MARGINS[max_depth-current_depth] > beta:
+			if score - REVERSE_FUTILTIY_MARGINS[depth] > beta:
 				return score
 
 	if game_over:
-		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
+		score = -CHECKMATE + level if board.is_checkmate() else 0
 		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-			position_table[pt_hash] = (EXACT, max_depth-current_depth, score, None)
+			position_table[pt_hash] = (EXACT, depth, score, None)
 		
 		return score
 
@@ -312,7 +312,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 	best_score = -CHECKMATE-1
 
 	# Iterate through all legal moves sorted
-	for move in sorted_moves(board.legal_moves, board, current_depth, pt_best_move=pt_best_move):
+	for move in sorted_moves(board.legal_moves, board, level, pt_best_move=pt_best_move):
 		move_count += 1
 
 		is_quiet = is_quiet_move(board, move)
@@ -323,16 +323,16 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 		# Late move reduction
 		reduction = 0
-		if move_count >= (LATE_MOVE_REDUCTION_MOVES + int(pv_node) * 2) and is_quiet and not board.is_check() and not board.gives_check(move) and (max_depth-current_depth) >= LATE_MOVE_REDUCTION_LEAF_DISTANCE:
-			reduction = LATE_MOVE_REDUCTION_TABLE[min(max_depth-current_depth, LATE_MOVE_REDUCTION_TABLE_SIZE-1)][min(move_count, LATE_MOVE_REDUCTION_TABLE_SIZE-1)]
+		if move_count >= (LATE_MOVE_REDUCTION_MOVES + int(pv_node) * 2) and is_quiet and not board.is_check() and not board.gives_check(move) and depth >= LATE_MOVE_REDUCTION_LEAF_DISTANCE:
+			reduction = LATE_MOVE_REDUCTION_TABLE[min(depth, LATE_MOVE_REDUCTION_TABLE_SIZE-1)][min(move_count, LATE_MOVE_REDUCTION_TABLE_SIZE-1)]
 
 		# Principal variation search
 		board.push(move)
 
 		if game_over:
-			score = -CHECKMATE + current_depth if board.is_checkmate() else 0
+			score = -CHECKMATE + level if board.is_checkmate() else 0
 		else:
-			score = alpha_beta(board, current_depth + 1 + reduction, max_depth, -alpha-1, -alpha)
+			score = alpha_beta(board, depth-1-reduction, level+1, -alpha-1, -alpha)
 		
 		board.pop()
 
@@ -347,7 +347,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		if (score > alpha) and (score < beta):
 			# Evaluate the move by recursively calling alpha beta
 			board.push(move)
-			score = alpha_beta(board, current_depth + 1, max_depth, -beta, -alpha)
+			score = alpha_beta(board, depth-1, level+1, -beta, -alpha)
 			board.pop()
 
 			if score is None:
@@ -362,10 +362,10 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		if score >= beta:
 			if is_quiet:
 				# Killer move heuristic
-				killer_moves[current_depth].insert(0, move)
+				killer_moves[level].insert(0, move)
 
 				# History heuristic
-				history_table[board.turn][move.from_square][move.to_square] += (max_depth-current_depth)**2
+				history_table[board.turn][move.from_square][move.to_square] += depth*depth
 
 				if history_table[board.turn][move.from_square][move.to_square] >= MAX_HISTORY_VALUE:
 					shrink_history(history_table)
@@ -375,7 +375,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 					countermove_table[board.move_stack[-2].from_square][board.move_stack[-2].to_square] = move
 
 			if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-				position_table[pt_hash] = (LOWER, max_depth-current_depth, beta, move)
+				position_table[pt_hash] = (LOWER, depth, beta, move)
 
 			return beta
 	
@@ -390,12 +390,12 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 	# Update the transposition table with the new information we've learned about this position
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
 		flag = UPPER if alpha <= alpha_orig else EXACT 
-		position_table[pt_hash] = (flag, max_depth-current_depth, alpha, best_move)
+		position_table[pt_hash] = (flag, depth, alpha, best_move)
 
 	return alpha
 
 
-def quiescence(board, current_depth, max_depth, alpha, beta):
+def quiescence(board, depth, level, alpha, beta):
 	"""
 	Quiescence Search
 
@@ -412,7 +412,8 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 	global seldepth
 	nodes += 1
 
-	seldepth = max(seldepth, current_depth)
+	if level > seldepth:
+		seldepth = level
 
 	# Get the positional evaluation of the current board
 	score = score_board(board)
@@ -425,29 +426,29 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 	if score < (alpha - DELTA_PRUNING_CUTOFF):
 		return alpha
 
-	alpha = max(alpha, score)
+	if score > alpha:
+		alpha = score
 
 	# Filter moves to only be "loud" moves including captures, promotions or checks
 	# We only search checks up to a certain depth to avoid searching check repetitions
 	# We only really care about tactical checks anyway like forks or discovered checks, etc.
 	sorted_quiescence_moves = sorted_moves(
-		(move for move in board.legal_moves if not is_quiet_move(board, move, quiescence_depth=current_depth-max_depth)),
+		(move for move in board.legal_moves if not is_quiet_move(board, move, quiescence_depth=-depth)),
 		board,
-		current_depth
+		level
 	)
 
 	# Same as the alpha beta negamax search
 	for move in sorted_quiescence_moves:
 		board.push(move)
-		score = quiescence(board, current_depth+1, max_depth, -beta, -alpha)
+		score = -quiescence(board, depth-1, level+1, -beta, -alpha)
 		board.pop()
-
-		score = -score
 
 		if score >= beta:
 			return beta
 
-		alpha = max(alpha, score)
+		if score > alpha:
+			alpha = score
 
 	return alpha
 
@@ -514,7 +515,7 @@ def iterative_deepening(board):
 				beta = gamma + aspw_higher
 
 				# Perform the alpha beta search
-				score = alpha_beta(board, 0, depth, alpha, beta)
+				score = alpha_beta(board, depth, 0, alpha, beta)
 
 				# If this happens it means we stopped mid search so just end the search
 				if score is None:
@@ -534,7 +535,7 @@ def iterative_deepening(board):
 					break
 				
 		else:
-			score = alpha_beta(board, 0, depth, -CHECKMATE, CHECKMATE)
+			score = alpha_beta(board, depth, 0, -CHECKMATE, CHECKMATE)
 			gamma = score
 
 
