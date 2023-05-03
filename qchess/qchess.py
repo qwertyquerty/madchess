@@ -417,11 +417,11 @@ def quiescence(board, current_depth, max_depth, alpha, beta):
 	# Get the positional evaluation of the current board
 	score = score_board(board)
 
-	# We beta cutoff early in quiescence
+	# We beta cutoff early in quiescence, known as "standing pat"
 	if score >= beta:
 		return beta
 
-	# Delta pruning
+	# Delta pruning, like futility pruning but for quiescence
 	if score < (alpha - DELTA_PRUNING_CUTOFF):
 		return alpha
 
