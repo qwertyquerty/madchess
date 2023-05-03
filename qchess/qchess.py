@@ -228,6 +228,8 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 	score = None
 
+	game_over = board.is_game_over()
+
 	pv_node = beta - alpha > 1
 
 	# Mate distance pruning
@@ -258,9 +260,6 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		pt_best_move = pt_entry[BEST_MOVE]
 		score = pt_entry[VALUE]
 
-	if board.is_stalemate() or board.is_insufficient_material() or board.can_claim_threefold_repetition():
-		return 0
-
 	# If we've reached our max depth or the game is over, perform a quiescence search
 	# If the game is over, the quiescence search will just immediately return the evaluated board anyway
 	if current_depth >= max_depth:
@@ -268,7 +267,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 	
 	futility_prunable = False
 
-	if not pv_node and not board.is_check() and not board.is_game_over():
+	if not pv_node and not board.is_check() and not game_over:
 		# Null move reduction
 		if can_null_move and current_depth != 0 and (max_depth-current_depth) >= 3:
 			if score is None: score = score_board(board)
@@ -299,6 +298,13 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 			if score - REVERSE_FUTILTIY_MARGINS[max_depth-current_depth] > beta:
 				return score
 
+	if game_over:
+		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
+		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
+			position_table[pt_hash] = (EXACT, max_depth-current_depth, score, None)
+		
+		return score
+
 	move_count = 0
 
 	# Keep track of the best board we evaluate so we can return it with its full move stack later
@@ -323,7 +329,7 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 		# Principal variation search
 		board.push(move)
 
-		if board.is_game_over():
+		if game_over:
 			score = -CHECKMATE + current_depth if board.is_checkmate() else 0
 		else:
 			score = alpha_beta(board, current_depth + 1 + reduction, max_depth, -alpha-1, -alpha)
@@ -380,13 +386,6 @@ def alpha_beta(board, current_depth, max_depth, alpha, beta, can_null_move=True)
 
 			if score > alpha:
 				alpha = score
-
-	if board.is_game_over():
-		score = -CHECKMATE + current_depth if board.is_checkmate() else 0
-		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
-			position_table[pt_hash] = (EXACT, max_depth-current_depth, score, None)
-		
-		return score
 
 	# Update the transposition table with the new information we've learned about this position
 	if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
