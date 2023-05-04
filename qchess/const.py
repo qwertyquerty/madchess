@@ -35,7 +35,7 @@ CHECKMATE = 100_000
 
 ## Transposition tables ##
 # Maximum amount of entries in the positional transposition table
-MAX_PTABLE_SIZE = 1_000_000
+MAX_PTABLE_SIZE = 4_000_000
 
 ## Piece Values (-, p, n, b, r, q, k) ##
 PIECE_VALUES = (0, 1, 3, 3, 5, 9, 0) # pawns
