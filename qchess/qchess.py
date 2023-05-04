@@ -1,5 +1,5 @@
 import chess
-from chess import WHITE, BLACK, KING, PAWN, BISHOP, KNIGHT, ROOK, QUEEN
+from chess import WHITE, BLACK, KING, PAWN, BISHOP, KNIGHT, ROOK, QUEEN, Termination
 import chess.polyglot
 import functools
 import math
@@ -18,22 +18,20 @@ def score_move(board, move, level, phase, pt_best_move = None):
 	a guess at how likely any given move is to be the correct move
 	"""
 
-	score = 0
-
 	if move == pt_best_move:
 		# we REALLY prefer to try the best move we found in the previous iteration first before anything else for alpha beta
 		return 90000
-
-	attacker = board.piece_at(move.from_square)
-	victim = board.piece_at(move.to_square)
 
 	# Promotions, we like to look at them first since they're momentuous moves
 	if move.promotion == QUEEN:
 		return 80000
 
+	victim = board.piece_at(move.to_square)
+	attacker = board.piece_at(move.from_square)
+
 	if victim is not None:
 		# MVV LVA, we prefer to take the most valuable victim with the least valuable attacker
-		return 70000 + lerp(PHASED_CP_PIECE_VALUES[MIDGAME][victim.piece_type], PHASED_CP_PIECE_VALUES[ENDGAME][victim.piece_type], phase) - lerp(PHASED_CP_PIECE_VALUES[MIDGAME][attacker.piece_type], PHASED_CP_PIECE_VALUES[MIDGAME][attacker.piece_type], phase)
+		return 70000 + CP_PIECE_VALUES[victim.piece_type] - CP_PIECE_VALUES[attacker.piece_type]
 
 	if move in killer_moves[level]:
 		return 60000 - killer_moves[level].index(move)
@@ -49,7 +47,7 @@ def score_move(board, move, level, phase, pt_best_move = None):
 	if board.gives_check(move):
 		return 30000
 
-	score += history_table[board.turn][move.from_square][move.to_square]
+	score = history_table[board.turn][move.from_square][move.to_square]
 
 	# Remaining passive moves
 
@@ -87,8 +85,6 @@ def sorted_moves(moves, board, level, pt_best_move = None):
 	"""
 	
 	phase = game_phase(board)
-
-	moves = list(moves)
 	moves.sort(key=lambda move: score_move(board, move, level, phase, pt_best_move), reverse=True)
 	return moves
 
@@ -114,7 +110,7 @@ def score_board(board):
 	but should be able to recognize basic positional advantage and material values.
 	"""
 	
-	if board.can_claim_draw() or board.is_insufficient_material() or board.is_stalemate():
+	if board.is_repetition(3) or board.can_claim_fifty_moves() or board.is_insufficient_material() or board.is_stalemate():
 		# Board is drawn
 		return 0
 
@@ -149,9 +145,10 @@ def score_board(board):
 			if piece_type == PAWN:
 				pawn_file_counts[piece_color][chess.square_file(square)] += 1
 
+			num_attacks = len(board.attacks(square))
 			score += lerp(
-				PIECE_MOBILITY_TABLES[piece_type][MIDGAME][len(board.attacks(square))], # midgame
-				PIECE_MOBILITY_TABLES[piece_type][ENDGAME][len(board.attacks(square))], # endgame
+				PIECE_MOBILITY_TABLES[piece_type][MIDGAME][num_attacks], # midgame
+				PIECE_MOBILITY_TABLES[piece_type][ENDGAME][num_attacks], # endgame
 				phase
 			) * color_mod
 
@@ -208,6 +205,8 @@ stop = True
 # Selective depth
 seldepth = 0
 
+allowed_movetime = None
+
 
 def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 	"""
@@ -227,8 +226,6 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 	alpha_orig = alpha
 
 	score = None
-
-	game_over = board.is_game_over()
 
 	pv_node = beta - alpha > 1
 
@@ -267,7 +264,10 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 	
 	futility_prunable = False
 
-	if not pv_node and not game_over and not board.is_check():
+	outcome = board.outcome()
+	is_check = board.is_check()
+
+	if not pv_node and outcome is None and not is_check:
 		# Null move reduction
 		if can_null_move and level != 0 and depth >= 3:
 			if score is None: score = score_board(board)
@@ -298,8 +298,8 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 			if score - REVERSE_FUTILTIY_MARGINS[depth] > beta:
 				return score
 
-	if game_over:
-		score = -CHECKMATE + level if board.is_checkmate() else 0
+	if outcome is not None:
+		score = -CHECKMATE + level if outcome.termination == Termination.CHECKMATE else 0
 		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
 			position_table[pt_hash] = (EXACT, depth, score, None)
 		
@@ -312,25 +312,23 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 	best_score = -CHECKMATE-1
 
 	# Iterate through all legal moves sorted
-	for move in sorted_moves(board.legal_moves, board, level, pt_best_move=pt_best_move):
+	for move in sorted_moves(list(board.legal_moves), board, level, pt_best_move=pt_best_move):
 		move_count += 1
 
-		is_quiet = is_quiet_move(board, move)
-
 		# Futility pruning
-		if futility_prunable and is_quiet and not is_mate_score(alpha) and not is_mate_score(beta):
+		if futility_prunable and not is_mate_score(alpha) and not is_mate_score(beta) and not is_check and is_quiet_move(board, move):
 			continue
 
 		# Late move reduction
 		reduction = 0
-		if move_count >= (LATE_MOVE_REDUCTION_MOVES + int(pv_node) * 2) and is_quiet and not board.is_check() and not board.gives_check(move) and depth >= LATE_MOVE_REDUCTION_LEAF_DISTANCE:
+		if move_count >= (LATE_MOVE_REDUCTION_MOVES + int(pv_node) * 2) and not is_check and depth >= LATE_MOVE_REDUCTION_LEAF_DISTANCE and is_quiet_move(board, move):
 			reduction = LATE_MOVE_REDUCTION_TABLE[min(depth, LATE_MOVE_REDUCTION_TABLE_SIZE-1)][min(move_count, LATE_MOVE_REDUCTION_TABLE_SIZE-1)]
 
 		# Principal variation search
 		board.push(move)
 
-		if game_over:
-			score = -CHECKMATE + level if board.is_checkmate() else 0
+		if outcome is not None:
+			score = -CHECKMATE + level if outcome.termination == Termination.CHECKMATE else 0
 		else:
 			score = alpha_beta(board, depth-1-reduction, level+1, -alpha-1, -alpha)
 		
@@ -360,9 +358,12 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 		# we dont need to evaluate this subtree any further because we know they will
 		# always play that move thats worse for us, or something even worse
 		if score >= beta:
-			if is_quiet:
+			if not is_check and is_quiet_move(board, move):
 				# Killer move heuristic
 				killer_moves[level].insert(0, move)
+
+				if len(killer_moves[level]) > MAX_KILLER_MOVES:
+					killer_moves[level].pop()
 
 				# History heuristic
 				history_table[board.turn][move.from_square][move.to_square] += depth*depth
@@ -432,8 +433,10 @@ def quiescence(board, depth, level, alpha, beta):
 	# Filter moves to only be "loud" moves including captures, promotions or checks
 	# We only search checks up to a certain depth to avoid searching check repetitions
 	# We only really care about tactical checks anyway like forks or discovered checks, etc.
+	loud_from_check = (-depth <= QUIESCENCE_CHECK_DEPTH_LIMIT) and board.is_check()
+
 	sorted_quiescence_moves = sorted_moves(
-		(move for move in board.legal_moves if not is_quiet_move(board, move, quiescence_depth=-depth)),
+		[move for move in board.legal_moves if loud_from_check or not is_quiet_move(board, move, quiescence_depth=-depth)],
 		board,
 		level
 	)

@@ -66,7 +66,7 @@ QUIESCENCE_CHECK_DEPTH_LIMIT = 3
 
 ## Aspiration Windows ##
 # How big (+/-) the aspiration window is around gamma
-ASPIRATION_WINDOW_DEFAULT = CP_PIECE_VALUES[PAWN]
+ASPIRATION_WINDOW_DEFAULT = 100
 # If the real value is outside of the aspiration window, multiply the limiting bound by this
 ASPIRATION_INCREASE_EXPONENT = 4
 # Only use aspiration windows at this depth or greater
@@ -92,6 +92,9 @@ HISTORY_SHRINK_FACTOR = 2
 
 ## Delta Pruning
 DELTA_PRUNING_CUTOFF = 1000
+
+# Killer Move Heuristic
+MAX_KILLER_MOVES = 16
 
 ## Positional values ##
 # Ratings for piece positionally in midgame, (first rank is on top)
