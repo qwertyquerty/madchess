@@ -424,8 +424,8 @@ def quiescence(board, depth, level, alpha, beta):
 		return beta
 
 	# Delta pruning, like futility pruning but for quiescence
-	if score < (alpha - DELTA_PRUNING_CUTOFF):
-		return alpha
+	#if score < (alpha - DELTA_PRUNING_CUTOFF):
+	#	return alpha
 
 	if score > alpha:
 		alpha = score
