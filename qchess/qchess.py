@@ -298,13 +298,13 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 			if score - REVERSE_FUTILTIY_MARGINS[depth] > beta:
 				return score
 
-	if outcome is not None:
-		score = -CHECKMATE + level if outcome.termination == Termination.CHECKMATE else 0
+	if outcome is not None or board.is_repetition(3) or board.can_claim_fifty_moves():
+		score = -CHECKMATE + level if (outcome is not None and outcome.termination == Termination.CHECKMATE) else 0
 		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
 			position_table[pt_hash] = (EXACT, depth, score, None)
 		
 		return score
-
+	
 	move_count = 0
 
 	# Keep track of the best board we evaluate so we can return it with its full move stack later
