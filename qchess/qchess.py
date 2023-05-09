@@ -110,7 +110,7 @@ def score_board(board):
 	but should be able to recognize basic positional advantage and material values.
 	"""
 	
-	if board.is_repetition(3) or board.can_claim_fifty_moves() or board.is_insufficient_material() or board.is_stalemate():
+	if board.is_insufficient_material() or board.is_stalemate():
 		# Board is drawn
 		return 0
 
@@ -119,7 +119,7 @@ def score_board(board):
 	# Check if we are in endgame using the amount of pieces on the board
 	phase = game_phase(board)
 
-	pawn_file_counts = ([0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]) # [turn][file]
+	#pawn_file_counts = ([0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]) # [turn][file]
 
 	for square in range(64): # Iterate through all pieces on the board
 		# Positional piece values, mirror the positional piece values vertically if the piece is black
@@ -128,7 +128,7 @@ def score_board(board):
 		if piece_type is not None:
 			piece_color = board.color_at(square)
 			color_mod = COLOR_MOD[piece_color]
-
+			"""
 			pov_square = square if piece_color == WHITE else chess.square_mirror(square)
 
 			score += lerp(
@@ -138,10 +138,12 @@ def score_board(board):
 			) * color_mod
 
 			score += chess.square_rank(pov_square) * WILL_TO_PUSH * color_mod
+			"""
 
 			# Piece values, add centipawn values for our pieces, subtract them for opponents pieces
 			score += lerp(PHASED_CP_PIECE_VALUES[MIDGAME][piece_type], PHASED_CP_PIECE_VALUES[ENDGAME][piece_type], phase) * color_mod
-
+		
+			"""
 			if piece_type == PAWN:
 				pawn_file_counts[piece_color][chess.square_file(square)] += 1
 
@@ -151,7 +153,9 @@ def score_board(board):
 				PIECE_MOBILITY_TABLES[piece_type][ENDGAME][num_attacks], # endgame
 				phase
 			) * color_mod
+			"""
 
+	"""
 	# Reward having both bishops
 	dbb = lerp(DOUBLE_BISHOP_BONUS[MIDGAME], DOUBLE_BISHOP_BONUS[ENDGAME], phase)
 	score += (dbb if len(board.pieces(BISHOP, WHITE)) == 2 else 0) - (dbb if len(board.pieces(BISHOP, BLACK)) == 2 else 0)
@@ -172,6 +176,7 @@ def score_board(board):
 		
 		if pawn_file_counts[BLACK][i] > 0 and (i == 0 or pawn_file_counts[BLACK][i-1] == 0) and (i == 7 or pawn_file_counts[BLACK][i+1] == 0):
 			score -= ipp
+	"""
 
 	# We want the score in the current players perspective for negamax to work
 	score *= COLOR_MOD[board.turn]
@@ -298,7 +303,7 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 			if score - REVERSE_FUTILTIY_MARGINS[depth] > beta:
 				return score
 
-	if outcome is not None or board.is_repetition(3) or board.can_claim_fifty_moves():
+	if outcome is not None:
 		score = -CHECKMATE + level if (outcome is not None and outcome.termination == Termination.CHECKMATE) else 0
 		if pt_entry is not None or len(position_table) < MAX_PTABLE_SIZE:
 			position_table[pt_hash] = (EXACT, depth, score, None)
@@ -325,14 +330,22 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 			reduction = LATE_MOVE_REDUCTION_TABLE[min(depth, LATE_MOVE_REDUCTION_TABLE_SIZE-1)][min(move_count, LATE_MOVE_REDUCTION_TABLE_SIZE-1)]
 
 		# Principal variation search
-		board.push(move)
+		if board.is_capture(move):
+			k = 3
+			board.push(move)
+			board.push(chess.Move.null())
+			board.push(chess.Move(move.to_square, move.from_square))
+		else:
+			k = 1
+			board.push(move)
 
 		if outcome is not None:
 			score = -CHECKMATE + level if outcome.termination == Termination.CHECKMATE else 0
 		else:
 			score = alpha_beta(board, depth-1-reduction, level+1, -alpha-1, -alpha)
 		
-		board.pop()
+		for i in range(k):
+			board.pop()
 
 		if score is None:
 			return
@@ -344,9 +357,18 @@ def alpha_beta(board, depth, level, alpha, beta, can_null_move=True):
 
 		if (score > alpha) and (score < beta):
 			# Evaluate the move by recursively calling alpha beta
-			board.push(move)
+			if board.is_capture(move):
+				board.push(move)
+				board.push(chess.Move.null())
+				board.push(chess.Move(move.to_square, move.from_square))
+				k = 3
+			else:
+				board.push(move)
+				k = 1
 			score = alpha_beta(board, depth-1, level+1, -beta, -alpha)
-			board.pop()
+
+			for i in range(k):
+				board.pop()
 
 			if score is None:
 				return
@@ -443,9 +465,19 @@ def quiescence(board, depth, level, alpha, beta):
 
 	# Same as the alpha beta negamax search
 	for move in sorted_quiescence_moves:
-		board.push(move)
+		if board.is_capture(move):
+			board.push(move)
+			board.push(chess.Move.null())
+			board.push(chess.Move(move.to_square, move.from_square))
+			k = 3
+		else:
+			board.push(move)
+			k = 1
+		
 		score = -quiescence(board, depth-1, level+1, -beta, -alpha)
-		board.pop()
+
+		for i in range(k):
+			board.pop()
 
 		if score >= beta:
 			return beta
